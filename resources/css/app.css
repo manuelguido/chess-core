@@ -6,31 +6,462 @@
 @source '../**/*.js';
 @source '../**/*.vue';
 
+/* =========================================================================
+   Checkmate Lab — Design System
+   --------------------------------------------------------------------------
+   Direction:   Modern-minimal with a dark-premium foundation.
+   Identity:    Refined, restrained, classical chess feel without skeuomorphism.
+   Accent:      A single warm gold (Staunton-inspired) — used sparingly for
+                selection / last-move / brand only.
+   Surfaces:    Warm dark neutrals (NOT pure black) so cream pieces and the
+                gold accent read warm rather than clinical.
+   ========================================================================= */
+
 @theme {
-    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+    /* Typography ---------------------------------------------------------- */
+    /* Plus Jakarta Sans — distinctive humanist geometry, premium feel.
+       Used for ALL UI: headings, controls, labels, body. JetBrains Mono is
+       reserved for `.num` (tabular figures) only. */
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+    --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, SFMono-Regular, Menlo,
+        Monaco, Consolas, monospace;
+
+    /* Surfaces — warm-neutral (slight 35-45 hue) -------------------------- */
+    --color-bg-base:     #131210;   /* page background — warmer than pure black  */
+    --color-bg-surface:  #1c1b18;   /* card / panel surface                      */
+    --color-bg-elevated: #25241f;   /* hover, popovers, inset cells              */
+    --color-bg-sunken:   #0e0d0b;   /* deepest — captured row, FEN block         */
+
+    --color-line-soft:   rgba(247, 240, 224, 0.06);
+    --color-line:        rgba(247, 240, 224, 0.10);
+    --color-line-strong: rgba(247, 240, 224, 0.16);
+
+    /* Text ---------------------------------------------------------------- */
+    --color-ink:         #f1ecdf;   /* primary — warm off-white                  */
+    --color-ink-muted:   #a39d8b;   /* secondary — labels, metadata              */
+    --color-ink-faint:   #6a6558;   /* tertiary — coords, FEN                    */
+
+    /* Accent — single warm gold (Staunton wood) --------------------------- */
+    --color-accent:      #c9a96e;
+    --color-accent-soft: rgba(201, 169, 110, 0.14);
+    --color-accent-edge: rgba(201, 169, 110, 0.42);
+
+    /* State semantics (used VERY sparingly) ------------------------------- */
+    --color-positive:    #84a07c;   /* up-material indicator                     */
+    --color-negative:    #c0746a;   /* down-material indicator                   */
+    --color-warning:     #d8a25a;   /* check                                     */
+
+    /* Board — classic walnut & cream (sober, low saturation) -------------- */
+    --color-square-light: #ece2c8;
+    --color-square-dark:  #8a7556;
+    --color-square-light-active: #ddc78a;   /* last-move tint on light square    */
+    --color-square-dark-active:  #a6904f;   /* last-move tint on dark square     */
+    --color-coord-light:  rgba(40, 30, 14, 0.40);   /* coords sitting on light  */
+    --color-coord-dark:   rgba(243, 233, 207, 0.45); /* coords sitting on dark  */
+
+    /* Motion -------------------------------------------------------------- */
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-emphasis: cubic-bezier(0.32, 0.72, 0, 1);
+
+    /* Shadow elevation (very restrained) ---------------------------------- */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.40);
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.40);
+    --shadow-board: 0 24px 60px -20px rgba(0, 0, 0, 0.75),
+                    0 8px 24px -8px rgba(0, 0, 0, 0.50);
 }
 
+/* =========================================================================
+   Base layer
+   ========================================================================= */
 @layer base {
-    :root {
-        color-scheme: dark;
+    :root { color-scheme: dark; }
+
+    html, body {
+        background: var(--color-bg-base);
+        color: var(--color-ink);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
     }
 
     body {
         min-height: 100vh;
-        background: #09090b;
-        color: #f4f4f5;
-        font-family: var(--font-sans);
+        font-feature-settings: 'ss01', 'ss02', 'cv01';
+        letter-spacing: -0.005em;
     }
 
-    button,
-    input {
-        font: inherit;
+    /* Typographic scale — strict & predictable ----------------------------- */
+    h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.022em; line-height: 1.2;  }
+    h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.3;  }
+    h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em;  line-height: 1.35; }
+
+    button, input { font: inherit; color: inherit; }
+
+    *:focus { outline: none; }
+    *:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 2px;
+        border-radius: inherit;
     }
 
     ::selection {
-        background: rgba(250, 204, 21, 0.25);
-        color: #fefce8;
+        background: var(--color-accent-soft);
+        color: var(--color-ink);
+    }
+
+    /* Scrollbars — minimal --------------------------------------------------- */
+    ::-webkit-scrollbar       { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+        background: var(--color-line);
+        border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--color-line-strong); }
+}
+
+/* =========================================================================
+   Components — opinionated primitives, all token-driven
+   ========================================================================= */
+@layer components {
+
+    /* ----- Surfaces ------------------------------------------------------- */
+    .panel {
+        background: var(--color-bg-surface);
+        border: 1px solid var(--color-line-soft);
+        border-radius: 12px;
+    }
+
+    .panel-inner {
+        background: var(--color-bg-sunken);
+        border: 1px solid var(--color-line-soft);
+        border-radius: 8px;
+    }
+
+    .panel-divider {
+        border-top: 1px solid var(--color-line-soft);
+    }
+
+    /* ----- Typography helpers -------------------------------------------- */
+    .eyebrow {
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--color-ink-faint);
+    }
+
+    .label {
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.4;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--color-ink-muted);
+    }
+
+    .meta {
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.5;
+        color: var(--color-ink-muted);
+    }
+
+    .num {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: 'tnum' 1;
+    }
+
+    /* ----- Buttons (single, coherent system) ----------------------------- */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: 38px;
+        padding: 0 16px;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition:
+            background-color 150ms var(--ease-standard),
+            border-color     150ms var(--ease-standard),
+            color            150ms var(--ease-standard),
+            transform        80ms  var(--ease-standard);
+        user-select: none;
+    }
+
+    .btn:active:not(:disabled) { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn--primary {
+        background: var(--color-accent);
+        color: #1a1505;
+        font-weight: 600;
+    }
+    .btn--primary:hover:not(:disabled) { background: #d6b87b; }
+
+    .btn--ghost {
+        background: transparent;
+        border-color: var(--color-line);
+        color: var(--color-ink);
+    }
+    .btn--ghost:hover:not(:disabled) {
+        border-color: var(--color-line-strong);
+        background: var(--color-bg-elevated);
+    }
+
+    .btn--quiet {
+        background: transparent;
+        color: var(--color-ink-muted);
+        height: 32px;
+        padding: 0 10px;
+        font-size: 12px;
+        border-color: var(--color-line-soft);
+    }
+    .btn--quiet:hover:not(:disabled) {
+        color: var(--color-ink);
+        border-color: var(--color-line);
+        background: var(--color-bg-elevated);
+    }
+
+    /* ----- Toggle/list-row buttons --------------------------------------- */
+    .row-btn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        height: 40px;
+        padding: 0 12px;
+        font-size: 13px;
+        text-align: left;
+        background: transparent;
+        border: 1px solid var(--color-line-soft);
+        border-radius: 8px;
+        color: var(--color-ink-muted);
+        cursor: pointer;
+        transition:
+            background-color 150ms var(--ease-standard),
+            border-color     150ms var(--ease-standard),
+            color            150ms var(--ease-standard);
+    }
+    .row-btn:hover:not([data-active='true']) {
+        background: var(--color-bg-elevated);
+        border-color: var(--color-line);
+        color: var(--color-ink);
+    }
+    .row-btn[data-active='true'] {
+        background: var(--color-accent-soft);
+        border-color: var(--color-accent-edge);
+        color: var(--color-accent);
+    }
+
+    /* ----- Range slider — gold accent, minimal --------------------------- */
+    .slider {
+        width: 100%;
+        appearance: none;
+        background: transparent;
+        cursor: pointer;
+    }
+    .slider::-webkit-slider-runnable-track {
+        height: 4px;
+        background: var(--color-line);
+        border-radius: 999px;
+    }
+    .slider::-moz-range-track {
+        height: 4px;
+        background: var(--color-line);
+        border-radius: 999px;
+    }
+    .slider::-webkit-slider-thumb {
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        margin-top: -6px;
+        border-radius: 50%;
+        background: var(--color-accent);
+        border: 2px solid var(--color-bg-base);
+        box-shadow: 0 0 0 1px var(--color-accent-edge);
+        transition: transform 120ms var(--ease-standard);
+    }
+    .slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--color-accent);
+        border: 2px solid var(--color-bg-base);
+        box-shadow: 0 0 0 1px var(--color-accent-edge);
+    }
+    .slider:hover::-webkit-slider-thumb { transform: scale(1.10); }
+    .slider:focus-visible::-webkit-slider-thumb {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 2px;
+    }
+
+    /* ----- Status pill --------------------------------------------------- */
+    .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 10px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border-radius: 999px;
+        background: var(--color-bg-elevated);
+        border: 1px solid var(--color-line-soft);
+        color: var(--color-ink-muted);
+    }
+    .pill--accent {
+        background: var(--color-accent-soft);
+        border-color: var(--color-accent-edge);
+        color: var(--color-accent);
+    }
+
+    /* ======================================================================
+       BOARD — the centerpiece. Token-driven; pieces are SVG components.
+       ====================================================================== */
+    .board {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        grid-template-rows: repeat(8, 1fr);
+        aspect-ratio: 1 / 1;
+        width: 100%;
+        max-width: 720px;
+        border-radius: 6px;
+        overflow: hidden;
+        box-shadow: var(--shadow-board);
+        outline: 1px solid rgba(0, 0, 0, 0.45);
+        outline-offset: 0;
+    }
+
+    .board-frame {
+        padding: 10px;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #2a2520 0%, #1f1b16 100%);
+        border: 1px solid var(--color-line-soft);
+        box-shadow: var(--shadow-2);
+    }
+
+    .square {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: filter 100ms var(--ease-standard);
+    }
+    .square:hover { filter: brightness(1.04); }
+
+    .square--light { background: var(--color-square-light); }
+    .square--dark  { background: var(--color-square-dark);  }
+
+    /* Last-move highlight: tint, not overlay — keeps pieces crisp ----------- */
+    .square--last.square--light { background: var(--color-square-light-active); }
+    .square--last.square--dark  { background: var(--color-square-dark-active);  }
+
+    /* Selected piece: gold inner ring, no outline jump --------------------- */
+    .square--selected::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        box-shadow: inset 0 0 0 3px var(--color-accent);
+        pointer-events: none;
+    }
+
+    /* Legal target dot (centered, gold) ------------------------------------ */
+    .square--target::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 22%;
+        height: 22%;
+        border-radius: 50%;
+        background: rgba(28, 22, 10, 0.32);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+    /* Legal target on a square holding an enemy piece — ring instead of dot */
+    .square--target.square--has-piece::after {
+        width: 88%;
+        height: 88%;
+        background: transparent;
+        border: 4px solid rgba(28, 22, 10, 0.32);
+        border-radius: 50%;
+    }
+
+    /* King-in-check halo --------------------------------------------------- */
+    .square--check {
+        background: radial-gradient(circle at center,
+            rgba(192, 116, 106, 0.85) 0%,
+            rgba(192, 116, 106, 0.40) 45%,
+            transparent 75%);
+    }
+
+    /* Coords --------------------------------------------------------------- */
+    .coord {
+        position: absolute;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0;
+        pointer-events: none;
+    }
+    .coord--rank { top: 3px;    left: 4px;  }
+    .coord--file { bottom: 3px; right: 5px; }
+    .square--light .coord { color: var(--color-coord-light); }
+    .square--dark  .coord { color: var(--color-coord-dark);  }
+
+    /* Piece sizing inside square ------------------------------------------- */
+    .piece {
+        position: relative;
+        z-index: 1;
+        width: 88%;
+        height: 88%;
+        pointer-events: none;
+        user-select: none;
+        filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+        will-change: transform;
+    }
+
+    /* When a piece just arrived at this square, animate from origin → here.
+       Driven by --mv-x / --mv-y inline CSS vars set by the page (in pixels).
+       Uses a keyframe so the starting offset is guaranteed regardless of
+       prior transform state, avoiding the reverse-animation pitfall. */
+    .piece--moving {
+        animation: piece-slide 160ms cubic-bezier(0.4, 0, 0.2, 1) both;
+        z-index: 2;
+    }
+}
+
+/* =========================================================================
+   Animations — restrained
+   ========================================================================= */
+@keyframes ck-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes piece-slide {
+    from { transform: translate(var(--mv-x, 0px), var(--mv-y, 0px)); }
+    to   { transform: translate(0, 0); }
+}
+
+.fade-in { animation: ck-fade-in 240ms var(--ease-emphasis) both; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
     }
 }

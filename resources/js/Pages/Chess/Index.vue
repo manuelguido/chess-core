@@ -1,21 +1,42 @@
 <script setup>
-import { computed, nextTick, ref, shallowRef } from 'vue';
+/**
+ * Checkmate Lab — main game page.
+ *
+ * UI/UX layer only — game logic (chess.js + minimax) is unchanged.
+ *
+ * Layout:
+ *   ┌──────────────── header (brand, status pill) ────────────────┐
+ *   │ ┌───────────┐  ┌────────────────────┐  ┌───────────────────┐│
+ *   │ │ Bot       │  │  status row        │  │ Current game card ││
+ *   │ │ strength  │  │  ┌──────────────┐  │  │ Move history      ││
+ *   │ │           │  │  │   board      │  │  │ Position FEN      ││
+ *   │ │ Captured  │  │  │              │  │  │                   ││
+ *   │ │           │  │  └──────────────┘  │  │                   ││
+ *   │ │           │  │  controls          │  │                   ││
+ *   │ └───────────┘  └────────────────────┘  └───────────────────┘│
+ *   └──────────────────────────────────────────────────────────────┘
+ */
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
 import { Head } from '@inertiajs/vue3';
-import { BrainCircuit, Crown, Flag, Gauge, History, RotateCcw, Shield, Sparkles, Swords, TimerReset } from 'lucide-vue-next';
+import {
+    BrainCircuit, Crown, Flag, Gauge, History, RotateCcw,
+    Shield, Sparkles, Swords, TimerReset,
+} from 'lucide-vue-next';
 import { Chess } from 'chess.js';
+import ChessPiece from '../../components/ChessPiece.vue';
 
 const props = defineProps({
     botProfiles: Array,
 });
 
-const pieceGlyphs = {
-    wp: '♙', wn: '♘', wb: '♗', wr: '♖', wq: '♕', wk: '♔',
-    bp: '♟', bn: '♞', bb: '♝', br: '♜', bq: '♛', bk: '♚',
-};
-
+/* ============================================================
+   Game state — unchanged logic
+   ============================================================ */
 const pieceValues = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
 const centerSquares = new Set(['d4', 'e4', 'd5', 'e5']);
-const extendedCenterSquares = new Set(['c3', 'd3', 'e3', 'f3', 'c4', 'f4', 'c5', 'f5', 'c6', 'd6', 'e6', 'f6']);
+const extendedCenterSquares = new Set([
+    'c3', 'd3', 'e3', 'f3', 'c4', 'f4', 'c5', 'f5', 'c6', 'd6', 'e6', 'f6',
+]);
 
 const game = shallowRef(new Chess());
 const board = ref(game.value.board());
@@ -32,84 +53,170 @@ const moveHistory = ref(game.value.history());
 const positionFen = ref(game.value.fen());
 const currentMoveNumber = ref(game.value.moveNumber());
 
+/* ============================================================
+   Move animation state
+   ------------------------------------------------------------
+   `animations` maps a destination square → { dx, dy, id } where
+   dx/dy are the pixel offsets the piece should appear to start at
+   (i.e. its previous square, expressed relative to its new one).
+   The destination piece renders with class `.piece--moving` and
+   inline `--mv-x` / `--mv-y` vars; a CSS keyframe slides it home.
+
+   `id` is bumped on every animation so Vue's :key forces the
+   piece element to remount and the keyframe re-fires — critical
+   when the same square animates twice in a row (e.g. recapture).
+
+   Castling pushes a *secondary* entry for the rook so both pieces
+   slide simultaneously.
+   ============================================================ */
+const boardEl = ref(null);
+const squarePx = ref(80);
+const animations = ref(new Map());
+let animSeq = 0;
+let animTimer = null;
+let boardRO = null;
+
+const ANIM_DURATION = 170;
+
+const measureBoard = () => {
+    if (boardEl.value) {
+        squarePx.value = boardEl.value.clientWidth / 8;
+    }
+};
+
+onMounted(() => {
+    measureBoard();
+    if (typeof ResizeObserver !== 'undefined' && boardEl.value) {
+        boardRO = new ResizeObserver(measureBoard);
+        boardRO.observe(boardEl.value);
+    }
+});
+
+onBeforeUnmount(() => {
+    if (boardRO) boardRO.disconnect();
+    if (animTimer) clearTimeout(animTimer);
+});
+
+const fileIdx = (sq) => sq.charCodeAt(0) - 97;          // a..h → 0..7
+const rankRow = (sq) => 8 - parseInt(sq[1], 10);        // 1..8 → 7..0 (top-down)
+
+/** Offset (in px) representing where `from` sits relative to `to`. */
+const offsetFor = (from, to) => {
+    const dx = (fileIdx(from) - fileIdx(to)) * squarePx.value;
+    const dy = (rankRow(from) - rankRow(to)) * squarePx.value;
+    return { dx, dy };
+};
+
+/**
+ * Schedule slide animations for a chess.js move.
+ * Handles the rook leg of castling automatically.
+ */
+const scheduleAnimation = (move) => {
+    const next = new Map();
+    const { dx, dy } = offsetFor(move.from, move.to);
+    next.set(move.to, { dx, dy, id: ++animSeq });
+
+    // Castling: chess.js sets flags 'k' (kingside) or 'q' (queenside).
+    if (move.flags && (move.flags.includes('k') || move.flags.includes('q'))) {
+        const rank = move.color === 'w' ? '1' : '8';
+        const isKingside = move.flags.includes('k');
+        const rookFrom = (isKingside ? 'h' : 'a') + rank;
+        const rookTo   = (isKingside ? 'f' : 'd') + rank;
+        const r = offsetFor(rookFrom, rookTo);
+        next.set(rookTo, { dx: r.dx, dy: r.dy, id: ++animSeq });
+    }
+
+    animations.value = next;
+
+    if (animTimer) clearTimeout(animTimer);
+    animTimer = setTimeout(() => {
+        animations.value = new Map();
+        animTimer = null;
+    }, ANIM_DURATION + 30);
+};
+
+/* ============================================================
+   Computed
+   ============================================================ */
 const activeProfile = computed(() => {
-    return [...props.botProfiles].reverse().find((profile) => elo.value >= profile.elo) ?? props.botProfiles[0];
+    return [...props.botProfiles].reverse().find((p) => elo.value >= p.elo) ?? props.botProfiles[0];
 });
 
 const status = computed(() => {
     positionFen.value;
-
     if (game.value.isCheckmate()) {
         return game.value.turn() === playerColor.value ? 'Checkmate' : 'Bot checkmated';
     }
-
-    if (game.value.isDraw()) {
-        return 'Draw';
-    }
-
-    if (game.value.isCheck()) {
-        return game.value.turn() === playerColor.value ? 'You are in check' : 'Bot in check';
-    }
-
-    if (botThinking.value) {
-        return `${activeProfile.value.name} thinking`;
-    }
-
+    if (game.value.isDraw())  return 'Draw';
+    if (game.value.isCheck()) return game.value.turn() === playerColor.value ? 'You are in check' : 'Bot in check';
+    if (botThinking.value)    return `${activeProfile.value.name} thinking`;
     return game.value.turn() === playerColor.value ? 'Your move' : 'Bot to move';
 });
 
 const gameTurnLabel = computed(() => {
     positionFen.value;
-
     if (game.value.isCheckmate()) {
         return game.value.turn() === playerColor.value ? 'Bot wins by checkmate' : 'You win by checkmate';
     }
-
-    if (game.value.isDraw()) {
-        return 'Game drawn';
-    }
-
+    if (game.value.isDraw()) return 'Game drawn';
     return game.value.turn() === 'w' ? 'White to move' : 'Black to move';
 });
 
 const materialBalance = computed(() => {
-    const whiteLost = capturedWhite.value.reduce((total, piece) => total + pieceValues[piece], 0);
-    const blackLost = capturedBlack.value.reduce((total, piece) => total + pieceValues[piece], 0);
-
-    return Math.round((blackLost - whiteLost) / 100 * 10) / 10;
+    const whiteLost = capturedWhite.value.reduce((t, p) => t + pieceValues[p], 0);
+    const blackLost = capturedBlack.value.reduce((t, p) => t + pieceValues[p], 0);
+    return Math.round(((blackLost - whiteLost) / 100) * 10) / 10;
 });
 
 const movePairs = computed(() => {
     const history = moveHistory.value;
     const pairs = [];
-
-    for (let index = 0; index < history.length; index += 2) {
+    for (let i = 0; i < history.length; i += 2) {
         pairs.push({
-            number: index / 2 + 1,
-            white: history[index],
-            black: history[index + 1] ?? '',
+            number: i / 2 + 1,
+            white: history[i],
+            black: history[i + 1] ?? '',
         });
     }
-
     return pairs.slice(-8).reverse();
 });
 
 const flattenedBoard = computed(() => {
-    return board.value.flatMap((rank, rowIndex) => rank.map((piece, fileIndex) => {
-        const square = `${String.fromCharCode(97 + fileIndex)}${8 - rowIndex}`;
-
-        return {
-            square,
-            piece,
-            rowIndex,
-            fileIndex,
-            dark: (rowIndex + fileIndex) % 2 === 1,
-        };
-    }));
+    return board.value.flatMap((rank, rowIndex) =>
+        rank.map((piece, fileIndex) => {
+            const square = `${String.fromCharCode(97 + fileIndex)}${8 - rowIndex}`;
+            return {
+                square,
+                piece,
+                rowIndex,
+                fileIndex,
+                dark: (rowIndex + fileIndex) % 2 === 1,
+            };
+        }),
+    );
 });
 
 const legalTargetSet = computed(() => new Set(legalTargets.value));
 
+/**
+ * Square holding the king of the side to move while in check —
+ * used to render the red halo. Null when no check.
+ */
+const kingInCheckSquare = computed(() => {
+    positionFen.value;
+    if (!game.value.isCheck()) return null;
+    const turn = game.value.turn();
+    for (const tile of flattenedBoard.value) {
+        if (tile.piece && tile.piece.type === 'k' && tile.piece.color === turn) {
+            return tile.square;
+        }
+    }
+    return null;
+});
+
+/* ============================================================
+   Helpers
+   ============================================================ */
 const syncBoard = () => {
     board.value = game.value.board();
     moveHistory.value = game.value.history();
@@ -117,51 +224,45 @@ const syncBoard = () => {
     currentMoveNumber.value = game.value.moveNumber();
 };
 
-const squareClasses = (tile) => {
-    const selected = selectedSquare.value === tile.square;
-    const legal = legalTargetSet.value.has(tile.square);
-    const last = lastMove.value && (lastMove.value.from === tile.square || lastMove.value.to === tile.square);
+const tileClasses = (tile) => {
+    const isSelected = selectedSquare.value === tile.square;
+    const isTarget   = legalTargetSet.value.has(tile.square);
+    const isLast     = lastMove.value && (lastMove.value.from === tile.square || lastMove.value.to === tile.square);
 
     return [
-        tile.dark ? 'bg-zinc-700' : 'bg-zinc-200',
-        selected ? 'ring-4 ring-yellow-300 ring-inset' : '',
-        legal ? 'after:absolute after:left-1/2 after:top-1/2 after:h-4 after:w-4 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-yellow-300/70' : '',
-        last ? 'outline outline-2 -outline-offset-2 outline-yellow-400/70' : '',
+        'square',
+        tile.dark ? 'square--dark' : 'square--light',
+        isSelected && 'square--selected',
+        isTarget && 'square--target',
+        isTarget && tile.piece && 'square--has-piece',
+        isLast && 'square--last',
+        kingInCheckSquare.value === tile.square && 'square--check',
     ];
 };
 
-const pieceClasses = (piece) => {
-    if (!piece) {
-        return '';
-    }
-
-    return piece.color === 'w'
-        ? 'text-zinc-50 drop-shadow-[0_2px_2px_rgba(0,0,0,0.55)]'
-        : 'text-zinc-950 drop-shadow-[0_1px_1px_rgba(255,255,255,0.35)]';
-};
-
+/* ============================================================
+   User actions
+   ============================================================ */
 const selectSquare = (tile) => {
-    if (botThinking.value || game.value.isGameOver() || game.value.turn() !== playerColor.value) {
-        return;
-    }
+    if (botThinking.value || game.value.isGameOver() || game.value.turn() !== playerColor.value) return;
 
     if (tile.piece?.color === playerColor.value) {
         selectedSquare.value = tile.square;
-        legalTargets.value = game.value.moves({ square: tile.square, verbose: true }).map((move) => move.to);
+        legalTargets.value = game.value
+            .moves({ square: tile.square, verbose: true })
+            .map((m) => m.to);
         return;
     }
 
-    if (!selectedSquare.value) {
-        return;
-    }
+    if (!selectedSquare.value) return;
 
     makePlayerMove(tile.square);
 };
 
-const makePlayerMove = (targetSquare) => {
+const makePlayerMove = (target) => {
     const move = game.value.move({
         from: selectedSquare.value,
-        to: targetSquare,
+        to: target,
         promotion: 'q',
     });
 
@@ -184,147 +285,96 @@ const makePlayerMove = (targetSquare) => {
 
 const makeBotMove = () => {
     const move = chooseBotMove();
-
     if (move) {
-        const playedMove = game.value.move(move);
-        registerMove(playedMove, 'bot');
+        const played = game.value.move(move);
+        registerMove(played, 'bot');
         syncBoard();
     }
-
     botThinking.value = false;
 };
 
 const registerMove = (move, side) => {
     if (move.captured) {
-        if (move.color === 'w') {
-            capturedBlack.value.push(move.captured);
-        } else {
-            capturedWhite.value.push(move.captured);
-        }
+        if (move.color === 'w') capturedBlack.value.push(move.captured);
+        else                    capturedWhite.value.push(move.captured);
     }
-
     lastMove.value = { from: move.from, to: move.to };
     moveFeedback.value = classifyMove(move, side);
+    scheduleAnimation(move);
 };
 
+/* ============================================================
+   Bot AI — unchanged
+   ============================================================ */
 const chooseBotMove = () => {
     const moves = game.value.moves({ verbose: true });
-
-    if (moves.length === 0) {
-        return null;
-    }
+    if (moves.length === 0) return null;
 
     const profile = activeProfile.value;
     const depth = profile.depth;
     const noise = Math.max(0, (3000 - elo.value) / 3000) * 180;
 
-    const scoredMoves = moves.map((move) => {
+    const scored = moves.map((move) => {
         game.value.move(move);
         const score = minimax(depth - 1, -Infinity, Infinity, true);
         game.value.undo();
-
-        return {
-            move,
-            score: score + (Math.random() * noise - noise / 2),
-        };
+        return { move, score: score + (Math.random() * noise - noise / 2) };
     });
 
-    scoredMoves.sort((first, second) => first.score - second.score);
+    scored.sort((a, b) => a.score - b.score);
 
-    if (elo.value < 1000) {
-        return scoredMoves[Math.floor(Math.random() * Math.min(scoredMoves.length, 6))].move;
-    }
-
+    if (elo.value < 1000) return scored[Math.floor(Math.random() * Math.min(scored.length, 6))].move;
     if (elo.value < 1500 && Math.random() < 0.28) {
-        return scoredMoves[Math.floor(Math.random() * Math.min(scoredMoves.length, 4))].move;
+        return scored[Math.floor(Math.random() * Math.min(scored.length, 4))].move;
     }
-
-    return scoredMoves[0].move;
+    return scored[0].move;
 };
 
-const minimax = (depth, alpha, beta, maximizingWhite) => {
-    if (depth === 0 || game.value.isGameOver()) {
-        return evaluatePosition();
-    }
-
+const minimax = (depth, alpha, beta, maxWhite) => {
+    if (depth === 0 || game.value.isGameOver()) return evaluatePosition();
     const moves = game.value.moves({ verbose: true });
-
-    if (maximizingWhite) {
-        let bestScore = -Infinity;
-
-        for (const move of moves) {
-            game.value.move(move);
-            bestScore = Math.max(bestScore, minimax(depth - 1, alpha, beta, false));
+    if (maxWhite) {
+        let best = -Infinity;
+        for (const m of moves) {
+            game.value.move(m);
+            best = Math.max(best, minimax(depth - 1, alpha, beta, false));
             game.value.undo();
-            alpha = Math.max(alpha, bestScore);
-
-            if (beta <= alpha) {
-                break;
-            }
+            alpha = Math.max(alpha, best);
+            if (beta <= alpha) break;
         }
-
-        return bestScore;
+        return best;
     }
-
-    let bestScore = Infinity;
-
-    for (const move of moves) {
-        game.value.move(move);
-        bestScore = Math.min(bestScore, minimax(depth - 1, alpha, beta, true));
+    let best = Infinity;
+    for (const m of moves) {
+        game.value.move(m);
+        best = Math.min(best, minimax(depth - 1, alpha, beta, true));
         game.value.undo();
-        beta = Math.min(beta, bestScore);
-
-        if (beta <= alpha) {
-            break;
-        }
+        beta = Math.min(beta, best);
+        if (beta <= alpha) break;
     }
-
-    return bestScore;
+    return best;
 };
 
 const evaluatePosition = () => {
-    if (game.value.isCheckmate()) {
-        return game.value.turn() === 'w' ? -100000 : 100000;
-    }
-
-    if (game.value.isDraw()) {
-        return 0;
-    }
-
+    if (game.value.isCheckmate()) return game.value.turn() === 'w' ? -100000 : 100000;
+    if (game.value.isDraw()) return 0;
     let score = 0;
-
     for (const tile of game.value.board().flat()) {
-        if (!tile) {
-            continue;
-        }
-
-        const squareBonus = centerSquares.has(tile.square) ? 18 : extendedCenterSquares.has(tile.square) ? 8 : 0;
-        const pieceScore = pieceValues[tile.type] + squareBonus;
-        score += tile.color === 'w' ? pieceScore : -pieceScore;
+        if (!tile) continue;
+        const bonus = centerSquares.has(tile.square) ? 18
+                    : extendedCenterSquares.has(tile.square) ? 8 : 0;
+        const ps = pieceValues[tile.type] + bonus;
+        score += tile.color === 'w' ? ps : -ps;
     }
-
     score += game.value.moves({ verbose: true }).length * (game.value.turn() === 'w' ? 1.5 : -1.5);
-
     return score;
 };
 
 const classifyMove = (move, side) => {
-    if (move.san.includes('#')) {
-        return side === 'player' ? 'Checkmate landed' : 'Engine mate threat';
-    }
-
-    if (move.san.includes('+')) {
-        return side === 'player' ? 'Forcing check' : 'Bot creates pressure';
-    }
-
-    if (move.captured) {
-        return side === 'player' ? 'Material captured' : 'Bot wins material';
-    }
-
-    if (centerSquares.has(move.to)) {
-        return side === 'player' ? 'Center control' : 'Bot contests center';
-    }
-
+    if (move.san.includes('#')) return side === 'player' ? 'Checkmate landed' : 'Engine mate threat';
+    if (move.san.includes('+')) return side === 'player' ? 'Forcing check'   : 'Bot creates pressure';
+    if (move.captured)          return side === 'player' ? 'Material captured' : 'Bot wins material';
+    if (centerSquares.has(move.to)) return side === 'player' ? 'Center control' : 'Bot contests center';
     return side === 'player' ? 'Position improved' : 'Bot develops';
 };
 
@@ -339,8 +389,9 @@ const newGame = async () => {
     lastMove.value = null;
     moveFeedback.value = 'Book-ready';
     botThinking.value = false;
+    animations.value = new Map();
+    if (animTimer) { clearTimeout(animTimer); animTimer = null; }
     syncBoard();
-
     await nextTick();
 };
 
@@ -351,39 +402,54 @@ const resign = () => {
 </script>
 
 <template>
-    <Head title="Chess AI" />
+    <Head title="Checkmate Lab" />
 
-    <main class="min-h-screen overflow-hidden bg-zinc-950 text-zinc-100">
-        <div class="pointer-events-none fixed inset-0 -z-10">
-            <div class="absolute left-1/2 top-0 h-[540px] w-[720px] -translate-x-1/2 rounded-full bg-yellow-400/10 blur-3xl" />
-            <div class="absolute bottom-0 right-0 h-[420px] w-[420px] rounded-full bg-indigo-500/10 blur-3xl" />
-            <div class="absolute inset-0 bg-[linear-gradient(rgba(250,250,250,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(250,250,250,0.025)_1px,transparent_1px)] bg-[size:34px_34px]" />
-        </div>
+    <main class="min-h-screen bg-bg-base text-ink">
+        <div class="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 py-6 lg:px-10 lg:py-8">
 
-        <section class="mx-auto flex min-h-screen max-w-[1500px] flex-col px-5 py-5 sm:px-8 lg:px-10">
-            <header class="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+            <!-- =====================================================
+                 Header — quiet, identity-led
+                 ===================================================== -->
+            <header class="flex flex-wrap items-center justify-between gap-4 pb-6">
                 <div class="flex items-center gap-3">
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg border border-yellow-300/30 bg-yellow-300/10 text-yellow-200 shadow-lg shadow-yellow-500/10">
-                        <Crown class="h-5 w-5" />
-                    </div>
-                    <div>
-                        <p class="text-xs font-medium uppercase tracking-[0.2em] text-yellow-200">Checkmate Lab</p>
-                        <h1 class="text-lg font-semibold tracking-tight text-white">Chess AI</h1>
+                    <span class="flex h-9 w-9 items-center justify-center rounded-md border border-line-soft bg-bg-surface">
+                        <Crown class="h-4 w-4 text-accent" :stroke-width="1.75" />
+                    </span>
+                    <div class="flex flex-col leading-tight">
+                        <span class="eyebrow">Checkmate Lab</span>
+                        <h1>Chess Studio</h1>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-2 text-xs font-medium text-zinc-300">
-                    <BrainCircuit class="h-4 w-4 text-yellow-200" />
-                    {{ activeProfile.name }} · {{ elo }} ELO
+                <div class="flex items-center gap-2">
+                    <span class="pill">
+                        <BrainCircuit class="h-3.5 w-3.5" :stroke-width="1.75" />
+                        {{ activeProfile.name }}
+                    </span>
+                    <span class="pill pill--accent num">{{ elo }} ELO</span>
                 </div>
             </header>
 
-            <div class="grid flex-1 gap-5 py-5 xl:grid-cols-[330px_minmax(520px,1fr)_360px]">
-                <aside class="space-y-5 order-2 xl:order-1">
-                    <section class="rounded-lg border border-zinc-800 bg-zinc-900/75 p-5 shadow-2xl shadow-black/30">
+            <!-- =====================================================
+                 Main 3-column grid — board takes more visual weight,
+                 side panels trimmed for prominence.
+                 ===================================================== -->
+            <div class="grid flex-1 gap-5 xl:grid-cols-[260px_minmax(0,1fr)_280px]">
+
+                <!-- =================================================
+                     LEFT — Bot config + Captured
+                     ================================================= -->
+                <aside class="order-2 flex flex-col gap-4 xl:order-1">
+
+                    <section class="panel p-5 fade-in">
                         <div class="mb-4 flex items-center justify-between">
-                            <h2 class="text-sm font-semibold text-white">Bot strength</h2>
-                            <Gauge class="h-4 w-4 text-yellow-200" />
+                            <h2>Bot strength</h2>
+                            <Gauge class="h-4 w-4 text-ink-faint" :stroke-width="1.5" />
+                        </div>
+
+                        <div class="mb-4 flex items-end justify-between">
+                            <span class="num text-3xl font-semibold text-ink tracking-tight">{{ elo }}</span>
+                            <span class="label">ELO</span>
                         </div>
 
                         <input
@@ -392,163 +458,219 @@ const resign = () => {
                             min="800"
                             max="3000"
                             step="100"
-                            class="w-full accent-yellow-300"
+                            class="slider"
+                            aria-label="Bot ELO"
                         >
 
-                        <div class="mt-4 grid grid-cols-2 gap-3">
-                            <div class="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
-                                <p class="text-xs text-zinc-500">Profile</p>
-                                <p class="mt-2 text-sm font-semibold text-white">{{ activeProfile.name }}</p>
-                            </div>
-                            <div class="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
-                                <p class="text-xs text-zinc-500">Style</p>
-                                <p class="mt-2 text-sm font-semibold text-white">{{ activeProfile.style }}</p>
-                            </div>
+                        <div class="mt-3 flex justify-between num text-[10px] text-ink-faint">
+                            <span>800</span>
+                            <span>3000</span>
                         </div>
 
-                        <div class="mt-4 grid gap-2">
+                        <div class="mt-5 grid gap-2">
                             <button
                                 v-for="profile in botProfiles"
                                 :key="profile.elo"
-                                class="flex items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm transition"
-                                :class="activeProfile.elo === profile.elo ? 'border-yellow-300/40 bg-yellow-300/10 text-yellow-100' : 'border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-100'"
+                                type="button"
+                                class="row-btn"
+                                :data-active="activeProfile.elo === profile.elo"
                                 @click="elo = profile.elo"
                             >
                                 <span>{{ profile.name }}</span>
-                                <span class="font-mono text-xs">{{ profile.elo }}</span>
+                                <span class="num text-[11px] text-ink-faint">{{ profile.elo }}</span>
                             </button>
+                        </div>
+
+                        <div class="mt-5 panel-divider grid grid-cols-2 gap-4 pt-4">
+                            <div>
+                                <p class="label">Style</p>
+                                <p class="mt-1 text-sm font-medium text-ink">{{ activeProfile.style }}</p>
+                            </div>
+                            <div>
+                                <p class="label">Depth</p>
+                                <p class="mt-1 text-sm font-medium text-ink num">{{ activeProfile.depth }}</p>
+                            </div>
                         </div>
                     </section>
 
-                    <section class="rounded-lg border border-zinc-800 bg-zinc-900/75 p-5 shadow-xl shadow-black/20">
+                    <section class="panel p-5 fade-in">
                         <div class="mb-4 flex items-center justify-between">
-                            <h2 class="text-sm font-semibold text-white">Captured</h2>
-                            <Swords class="h-4 w-4 text-yellow-200" />
+                            <h2>Captured</h2>
+                            <Swords class="h-4 w-4 text-ink-faint" :stroke-width="1.5" />
                         </div>
+
                         <div class="space-y-3">
-                            <div class="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
-                                <p class="text-xs text-zinc-500">White pieces lost</p>
-                                <p class="mt-2 min-h-7 text-2xl text-zinc-100">
-                                    <span v-for="(piece, index) in capturedWhite" :key="`${piece}-${index}`">{{ pieceGlyphs[`w${piece}`] }}</span>
-                                </p>
+                            <div class="panel-inner p-3">
+                                <p class="label">White lost</p>
+                                <div class="mt-2 flex min-h-9 flex-wrap items-center gap-1">
+                                    <span
+                                        v-for="(piece, index) in capturedWhite"
+                                        :key="`w-${piece}-${index}`"
+                                        class="block h-7 w-7"
+                                    >
+                                        <ChessPiece color="w" :type="piece" />
+                                    </span>
+                                </div>
                             </div>
-                            <div class="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
-                                <p class="text-xs text-zinc-500">Black pieces lost</p>
-                                <p class="mt-2 min-h-7 text-2xl text-zinc-100">
-                                    <span v-for="(piece, index) in capturedBlack" :key="`${piece}-${index}`">{{ pieceGlyphs[`b${piece}`] }}</span>
-                                </p>
+                            <div class="panel-inner p-3">
+                                <p class="label">Black lost</p>
+                                <div class="mt-2 flex min-h-9 flex-wrap items-center gap-1">
+                                    <span
+                                        v-for="(piece, index) in capturedBlack"
+                                        :key="`b-${piece}-${index}`"
+                                        class="block h-7 w-7"
+                                    >
+                                        <ChessPiece color="b" :type="piece" />
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </section>
                 </aside>
 
-                <section class="order-1 flex flex-col items-center justify-center xl:order-2">
-                    <div class="mb-4 grid w-full max-w-[720px] grid-cols-2 gap-3 sm:grid-cols-4">
-                        <div class="rounded-lg border border-zinc-800 bg-zinc-900/75 p-4">
-                            <p class="text-xs text-zinc-500">Status</p>
-                            <p class="mt-2 truncate text-sm font-semibold text-white">{{ status }}</p>
+                <!-- =================================================
+                     CENTER — board
+                     ================================================= -->
+                <section class="order-1 flex flex-col items-center xl:order-2">
+
+                    <!-- Status strip — single inline row, restrained -->
+                    <div class="mb-4 grid w-full max-w-[720px] grid-cols-4 gap-px overflow-hidden rounded-lg border border-line-soft bg-line-soft">
+                        <div class="bg-bg-surface px-4 py-3">
+                            <p class="label">Status</p>
+                            <p class="mt-1.5 truncate text-sm font-medium text-ink">{{ status }}</p>
                         </div>
-                        <div class="rounded-lg border border-zinc-800 bg-zinc-900/75 p-4">
-                            <p class="text-xs text-zinc-500">Material</p>
-                            <p class="mt-2 text-sm font-semibold" :class="materialBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'">
+                        <div class="bg-bg-surface px-4 py-3">
+                            <p class="label">Material</p>
+                            <p
+                                class="mt-1.5 num text-sm font-medium"
+                                :class="materialBalance > 0 ? 'text-positive' : materialBalance < 0 ? 'text-negative' : 'text-ink'"
+                            >
                                 {{ materialBalance > 0 ? '+' : '' }}{{ materialBalance }}
                             </p>
                         </div>
-                        <div class="rounded-lg border border-zinc-800 bg-zinc-900/75 p-4">
-                            <p class="text-xs text-zinc-500">Move</p>
-                            <p class="mt-2 text-sm font-semibold text-white">{{ currentMoveNumber }}</p>
+                        <div class="bg-bg-surface px-4 py-3">
+                            <p class="label">Move</p>
+                            <p class="mt-1.5 num text-sm font-medium text-ink">{{ currentMoveNumber }}</p>
                         </div>
-                        <div class="rounded-lg border border-zinc-800 bg-zinc-900/75 p-4">
-                            <p class="text-xs text-zinc-500">Analysis</p>
-                            <p class="mt-2 truncate text-sm font-semibold text-yellow-200">{{ moveFeedback }}</p>
+                        <div class="bg-bg-surface px-4 py-3">
+                            <p class="label">Analysis</p>
+                            <p class="mt-1.5 truncate text-sm font-medium text-accent">{{ moveFeedback }}</p>
                         </div>
                     </div>
 
-                    <div class="relative aspect-square w-full max-w-[720px] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800 p-2 shadow-2xl shadow-black/50">
-                        <div class="grid h-full w-full grid-cols-8 grid-rows-8 overflow-hidden rounded-md border border-zinc-950/70">
+                    <!-- Board frame -->
+                    <div class="board-frame w-full max-w-[720px]">
+                        <div ref="boardEl" class="board" role="grid" aria-label="Chess board">
                             <button
                                 v-for="tile in flattenedBoard"
                                 :key="tile.square"
-                                class="relative flex items-center justify-center text-[clamp(2rem,7vw,4.6rem)] transition hover:brightness-110"
-                                :class="squareClasses(tile)"
+                                type="button"
+                                role="gridcell"
+                                :aria-label="`${tile.square} ${tile.piece ? (tile.piece.color === 'w' ? 'white' : 'black') + ' ' + tile.piece.type : 'empty'}`"
+                                :class="tileClasses(tile)"
                                 @click="selectSquare(tile)"
                             >
-                                <span v-if="tile.piece" class="relative z-10 leading-none" :class="pieceClasses(tile.piece)">
-                                    {{ pieceGlyphs[`${tile.piece.color}${tile.piece.type}`] }}
+                                <ChessPiece
+                                    v-if="tile.piece"
+                                    :key="animations.get(tile.square)?.id ?? 0"
+                                    :class="['piece', animations.has(tile.square) && 'piece--moving']"
+                                    :style="animations.get(tile.square) ? {
+                                        '--mv-x': animations.get(tile.square).dx + 'px',
+                                        '--mv-y': animations.get(tile.square).dy + 'px',
+                                    } : null"
+                                    :color="tile.piece.color"
+                                    :type="tile.piece.type"
+                                />
+                                <span v-if="tile.fileIndex === 0" class="coord coord--rank">
+                                    {{ tile.square[1] }}
                                 </span>
-                                <span class="pointer-events-none absolute bottom-1 left-1 font-mono text-[10px] font-semibold" :class="tile.dark ? 'text-zinc-300/45' : 'text-zinc-700/50'">
-                                    {{ tile.fileIndex === 0 ? tile.square[1] : '' }}
-                                </span>
-                                <span class="pointer-events-none absolute bottom-1 right-1 font-mono text-[10px] font-semibold" :class="tile.dark ? 'text-zinc-300/45' : 'text-zinc-700/50'">
-                                    {{ tile.rowIndex === 7 ? tile.square[0] : '' }}
+                                <span v-if="tile.rowIndex === 7" class="coord coord--file">
+                                    {{ tile.square[0] }}
                                 </span>
                             </button>
                         </div>
                     </div>
 
-                    <div class="mt-4 flex w-full max-w-[720px] flex-wrap gap-3">
-                        <button class="inline-flex items-center justify-center gap-2 rounded-lg bg-yellow-300 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-yellow-200" @click="newGame">
-                            <RotateCcw class="h-4 w-4" />
-                            New game
-                        </button>
-                        <button class="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900" @click="resign">
-                            <Flag class="h-4 w-4" />
-                            Reset line
-                        </button>
+                    <!-- Controls -->
+                    <div class="mt-5 flex w-full max-w-[720px] items-center justify-between gap-3">
+                        <p class="meta">
+                            <span class="text-ink">{{ gameTurnLabel }}</span>
+                            <span class="mx-2 text-ink-faint">·</span>
+                            <span>You play white</span>
+                        </p>
+
+                        <div class="flex gap-2">
+                            <button class="btn btn--ghost" type="button" @click="resign">
+                                <Flag class="h-3.5 w-3.5" :stroke-width="1.75" />
+                                Reset line
+                            </button>
+                            <button class="btn btn--primary" type="button" @click="newGame">
+                                <RotateCcw class="h-3.5 w-3.5" :stroke-width="2" />
+                                New game
+                            </button>
+                        </div>
                     </div>
                 </section>
 
-                <aside class="order-3 space-y-5">
-                    <section class="rounded-lg border border-yellow-300/20 bg-yellow-300/[0.045] p-5 shadow-2xl shadow-yellow-950/20">
-                        <div class="flex items-start justify-between gap-4">
+                <!-- =================================================
+                     RIGHT — Game card + history + FEN
+                     ================================================= -->
+                <aside class="order-3 flex flex-col gap-4">
+
+                    <section class="panel p-5 fade-in">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-xs font-medium uppercase tracking-[0.18em] text-yellow-200">Current game</p>
-                                <h2 class="mt-2 text-2xl font-semibold text-white">{{ gameTurnLabel }}</h2>
-                                <p class="mt-1 text-sm text-zinc-400">You play white against {{ activeProfile.name }}</p>
+                                <p class="eyebrow">Current game</p>
+                                <h2 class="mt-2 text-base text-ink">{{ gameTurnLabel }}</h2>
+                                <p class="meta mt-1">vs. {{ activeProfile.name }}</p>
                             </div>
-                            <Shield class="h-5 w-5 text-yellow-200" />
+                            <Shield class="h-4 w-4 text-ink-faint" :stroke-width="1.5" />
                         </div>
 
                         <div class="mt-5 grid grid-cols-2 gap-3">
-                            <div class="rounded-lg border border-zinc-800 bg-zinc-950/50 p-4">
-                                <TimerReset class="h-4 w-4 text-yellow-200" />
-                                <p class="mt-3 text-xs text-zinc-500">Bot delay</p>
-                                <p class="mt-1 text-lg font-semibold text-white">{{ botDelay() }}ms</p>
+                            <div class="panel-inner p-3">
+                                <TimerReset class="h-3.5 w-3.5 text-ink-faint" :stroke-width="1.5" />
+                                <p class="label mt-2">Bot delay</p>
+                                <p class="mt-1 num text-sm font-medium text-ink">{{ botDelay() }}<span class="text-ink-faint text-[10px] ml-0.5">ms</span></p>
                             </div>
-                            <div class="rounded-lg border border-zinc-800 bg-zinc-950/50 p-4">
-                                <Sparkles class="h-4 w-4 text-yellow-200" />
-                                <p class="mt-3 text-xs text-zinc-500">Depth</p>
-                                <p class="mt-1 text-lg font-semibold text-white">{{ activeProfile.depth }}</p>
+                            <div class="panel-inner p-3">
+                                <Sparkles class="h-3.5 w-3.5 text-ink-faint" :stroke-width="1.5" />
+                                <p class="label mt-2">Search depth</p>
+                                <p class="mt-1 num text-sm font-medium text-ink">{{ activeProfile.depth }}</p>
                             </div>
                         </div>
                     </section>
 
-                    <section class="rounded-lg border border-zinc-800 bg-zinc-900/75 p-5 shadow-xl shadow-black/20">
+                    <section class="panel p-5 fade-in">
                         <div class="mb-4 flex items-center justify-between">
-                            <h2 class="text-sm font-semibold text-white">Move history</h2>
-                            <History class="h-4 w-4 text-yellow-200" />
+                            <h2>Move history</h2>
+                            <History class="h-4 w-4 text-ink-faint" :stroke-width="1.5" />
                         </div>
 
-                        <div class="space-y-2">
-                            <div v-if="movePairs.length === 0" class="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3 text-sm text-zinc-500">
-                                Start with any legal white move.
+                        <div class="space-y-1">
+                            <div v-if="movePairs.length === 0" class="meta py-2">
+                                Play any legal white move to begin.
                             </div>
-                            <div v-for="pair in movePairs" :key="pair.number" class="grid grid-cols-[42px_1fr_1fr] gap-2 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2.5 text-sm">
-                                <span class="font-mono text-xs text-zinc-500">{{ pair.number }}.</span>
-                                <span class="font-medium text-zinc-100">{{ pair.white }}</span>
-                                <span class="font-medium text-zinc-400">{{ pair.black }}</span>
+                            <div
+                                v-for="pair in movePairs"
+                                :key="pair.number"
+                                class="grid grid-cols-[28px_1fr_1fr] items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-bg-elevated transition-colors duration-150"
+                            >
+                                <span class="num text-[11px] text-ink-faint">{{ pair.number }}.</span>
+                                <span class="num font-medium text-ink">{{ pair.white }}</span>
+                                <span class="num text-ink-muted">{{ pair.black }}</span>
                             </div>
                         </div>
                     </section>
 
-                    <section class="rounded-lg border border-zinc-800 bg-zinc-900/75 p-5 shadow-xl shadow-black/20">
-                        <h2 class="text-sm font-semibold text-white">Position FEN</h2>
-                        <p class="mt-3 break-all rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 font-mono text-xs leading-relaxed text-zinc-400">
+                    <section class="panel p-5 fade-in">
+                        <h2>Position</h2>
+                        <p class="mt-3 panel-inner num break-all p-3 text-[11px] leading-relaxed text-ink-muted">
                             {{ positionFen }}
                         </p>
                     </section>
                 </aside>
             </div>
-        </section>
+        </div>
     </main>
 </template>

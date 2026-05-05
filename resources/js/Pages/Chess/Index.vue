@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Checkmate Lab — main game page.
+ * Chess Studio — main game page.
  *
  * UI/UX layer only — game logic (chess.js + minimax) is unchanged.
  *
@@ -402,7 +402,7 @@ const resign = () => {
 </script>
 
 <template>
-    <Head title="Checkmate Lab" />
+    <Head title="Chess Studio" />
 
     <main class="min-h-screen bg-bg-base text-ink">
         <div class="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 py-6 lg:px-10 lg:py-8">
@@ -416,7 +416,7 @@ const resign = () => {
                         <Crown class="h-4 w-4 text-accent" :stroke-width="1.75" />
                     </span>
                     <div class="flex flex-col leading-tight">
-                        <span class="eyebrow">Checkmate Lab</span>
+                        <span class="eyebrow">Chess Studio</span>
                         <h1>Chess Studio</h1>
                     </div>
                 </div>

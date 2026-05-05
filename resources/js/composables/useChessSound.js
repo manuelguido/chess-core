@@ -97,13 +97,12 @@ function tone(freq, vol, delay, dur) {
 
 /** Quiet single thud — normal move. */
 function playMove() {
-    woodThud(0.55, 0.1, 700);
+    woodThud(1, 0.055, 700);
 }
 
 /** Two overlapping thuds — piece taken + capturer lands. */
 function playCapture() {
-    woodThud(0.72, 0.13, 580);
-    setTimeout(() => woodThud(0.45, 0.09, 740), 20);
+    setTimeout(() => woodThud(0.8, 0.05, 700), 80);
 }
 
 /** Two quick ascending tones — check alert. */

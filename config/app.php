@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Chess Studio'),
+    'name' => env('APP_NAME', 'Chess Core'),
 
     /*
     |--------------------------------------------------------------------------

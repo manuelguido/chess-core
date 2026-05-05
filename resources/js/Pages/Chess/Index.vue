@@ -39,10 +39,13 @@ import {
 } from "lucide-vue-next";
 import { Chess } from "chess.js";
 import ChessPiece from "../../components/ChessPiece.vue";
+import { useChessSound } from "../../composables/useChessSound.js";
 
 const props = defineProps({
     botProfiles: Array,
 });
+
+const { playForMove } = useChessSound();
 
 /* ============================================================
    Game state — unchanged logic
@@ -357,6 +360,7 @@ const registerMove = (move, side) => {
     lastMove.value = { from: move.from, to: move.to };
     moveFeedback.value = classifyMove(move, side);
     scheduleAnimation(move);
+    playForMove(move, game.value.isGameOver());
 };
 
 /* ============================================================

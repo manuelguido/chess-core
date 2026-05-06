@@ -6,7 +6,8 @@ const chess = useChessStore();
 
 <template>
     <div
-        class="mb-4 grid w-full max-w-180 grid-cols-4 gap-px overflow-hidden rounded-lg border border-line-soft bg-line-soft"
+        class="mb-4 grid w-full max-w-180 gap-px overflow-hidden rounded-lg border border-line-soft bg-line-soft"
+        :class="chess.isReviewing ? 'grid-cols-5' : 'grid-cols-4'"
     >
         <div class="bg-bg-surface px-4 py-3">
             <p class="label">Status</p>
@@ -39,6 +40,13 @@ const chess = useChessStore();
             <p class="label">Analysis</p>
             <p class="mt-1.5 truncate text-sm font-medium text-accent">
                 {{ chess.moveFeedback }}
+            </p>
+        </div>
+        <!-- Review indicator cell -->
+        <div v-if="chess.isReviewing" class="bg-bg-elevated px-4 py-3">
+            <p class="label">Viewing</p>
+            <p class="mt-1.5 truncate text-sm font-medium text-accent">
+                Move {{ chess.viewCursor + 1 }}
             </p>
         </div>
     </div>

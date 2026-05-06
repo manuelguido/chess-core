@@ -104,12 +104,12 @@ const displayTiles = computed(() =>
    Tile styling
    ============================================================ */
 const tileClasses = (tile) => {
-    const isSelected = chess.selectedSquare === tile.square;
-    const isTarget = chess.legalTargetSet.has(tile.square);
+    const isSelected = !chess.isReviewing && chess.selectedSquare === tile.square;
+    const isTarget = !chess.isReviewing && chess.legalTargetSet.has(tile.square);
     const isLast =
-        chess.lastMove &&
-        (chess.lastMove.from === tile.square ||
-            chess.lastMove.to === tile.square);
+        chess.viewLastMove &&
+        (chess.viewLastMove.from === tile.square ||
+            chess.viewLastMove.to === tile.square);
 
     return [
         "square",

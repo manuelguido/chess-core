@@ -6,7 +6,7 @@ const chess = useChessStore();
 </script>
 
 <template>
-    <section class="panel p-5 fade-in">
+    <section class="panel p-5 fade-in" :class="chess.configLocked && 'opacity-60'">
         <div class="mb-4 flex items-center justify-between">
             <h2>Bot strength</h2>
             <Gauge class="h-4 w-4 text-ink-faint" :stroke-width="1.5" />
@@ -23,15 +23,16 @@ const chess = useChessStore();
             v-model="chess.elo"
             type="range"
             min="800"
-            max="3000"
+            max="2400"
             step="100"
             class="slider"
+            :disabled="chess.configLocked"
             aria-label="Bot ELO"
         />
 
         <div class="mt-3 flex justify-between num text-[10px] text-ink-faint">
             <span>800</span>
-            <span>3000</span>
+            <span>2400</span>
         </div>
 
         <div class="mt-5 grid gap-2">
@@ -41,6 +42,7 @@ const chess = useChessStore();
                 type="button"
                 class="row-btn"
                 :data-active="chess.activeProfile?.elo === profile.elo"
+                :disabled="chess.configLocked"
                 @click="chess.elo = profile.elo"
             >
                 <span>{{ profile.name }}</span>

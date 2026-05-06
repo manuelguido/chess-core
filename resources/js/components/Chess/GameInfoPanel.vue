@@ -1,8 +1,28 @@
 <script setup>
+import { computed } from "vue";
 import { Shield, Sparkles, TimerReset } from "lucide-vue-next";
 import { useChessStore } from "../../stores/useChessStore.js";
 
 const chess = useChessStore();
+
+// Read engine params for display — mirrors store's engineParams
+const engineParams = (elo) => {
+    if (elo <= 800)  return { depth: 1, noise: 350 };
+    if (elo <= 1000) return { depth: 2, noise: 220 };
+    if (elo <= 1200) return { depth: 2, noise: 130 };
+    if (elo <= 1400) return { depth: 3, noise:  70 };
+    if (elo <= 1600) return { depth: 4, noise:  28 };
+    if (elo <= 2000) return { depth: 4, noise:   6 };
+    return               { depth: 5, noise:   0 };
+};
+
+const params = computed(() => engineParams(chess.elo));
+
+const formatTc = (tc) => {
+    if (!tc) return "∞";
+    const m = Math.floor(tc.base / 60);
+    return tc.increment ? `${m}+${tc.increment}` : `${m}+0`;
+};
 </script>
 
 <template>
@@ -19,17 +39,16 @@ const chess = useChessStore();
         <div class="mt-5 grid grid-cols-2 gap-3">
             <div class="panel-inner p-3">
                 <TimerReset class="h-3.5 w-3.5 text-ink-faint" :stroke-width="1.5" />
-                <p class="label mt-2">Bot delay</p>
+                <p class="label mt-2">Time control</p>
                 <p class="mt-1 num text-sm font-medium text-ink">
-                    {{ chess.botDelay()
-                    }}<span class="text-ink-faint text-[10px] ml-0.5">ms</span>
+                    {{ formatTc(chess.timeControl) }}
                 </p>
             </div>
             <div class="panel-inner p-3">
                 <Sparkles class="h-3.5 w-3.5 text-ink-faint" :stroke-width="1.5" />
                 <p class="label mt-2">Search depth</p>
                 <p class="mt-1 num text-sm font-medium text-ink">
-                    {{ chess.activeProfile?.depth }}
+                    {{ params.depth }}
                 </p>
             </div>
         </div>

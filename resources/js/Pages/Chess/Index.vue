@@ -645,7 +645,7 @@ const resign = () => {
                 <section class="order-1 flex flex-col items-center xl:order-2">
                     <!-- Status strip — single inline row, restrained -->
                     <div
-                        class="mb-4 grid w-full max-w-[720px] grid-cols-4 gap-px overflow-hidden rounded-lg border border-line-soft bg-line-soft"
+                        class="mb-4 grid w-full max-w-180 grid-cols-4 gap-px overflow-hidden rounded-lg border border-line-soft bg-line-soft"
                     >
                         <div class="bg-bg-surface px-4 py-3">
                             <p class="label">Status</p>
@@ -688,7 +688,7 @@ const resign = () => {
                     </div>
 
                     <!-- Board frame -->
-                    <div class="board-frame w-full max-w-[720px]">
+                    <div class="board-frame w-full max-w-180">
                         <div
                             ref="boardEl"
                             class="board"
@@ -747,7 +747,7 @@ const resign = () => {
 
                     <!-- Controls -->
                     <div
-                        class="mt-5 flex w-full max-w-[720px] items-center justify-between gap-3"
+                        class="mt-5 flex w-full max-w-180 items-center justify-between gap-3"
                     >
                         <p class="meta">
                             <span class="text-ink">{{ gameTurnLabel }}</span>

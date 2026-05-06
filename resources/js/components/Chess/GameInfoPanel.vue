@@ -5,15 +5,15 @@ import { useChessStore } from "../../stores/useChessStore.js";
 
 const chess = useChessStore();
 
-// Read engine params for display — mirrors store's engineParams
+// Mirrors store's engineParams — only depth is displayed here
 const engineParams = (elo) => {
-    if (elo <= 800)  return { depth: 1, noise: 350 };
-    if (elo <= 1000) return { depth: 2, noise: 220 };
-    if (elo <= 1200) return { depth: 2, noise: 130 };
-    if (elo <= 1400) return { depth: 3, noise:  70 };
-    if (elo <= 1600) return { depth: 4, noise:  28 };
-    if (elo <= 2000) return { depth: 4, noise:   6 };
-    return               { depth: 5, noise:   0 };
+    if (elo <= 800)  return { depth: 1 };
+    if (elo <= 1000) return { depth: 2 };
+    if (elo <= 1200) return { depth: 2 };
+    if (elo <= 1400) return { depth: 3 };
+    if (elo <= 1600) return { depth: 4 };
+    if (elo <= 2200) return { depth: 5 };
+    return               { depth: 5 };
 };
 
 const params = computed(() => engineParams(chess.elo));

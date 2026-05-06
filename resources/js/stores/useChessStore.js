@@ -6,31 +6,57 @@ import { useChessSound } from "../composables/useChessSound.js";
 const pieceValues = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
 const centerSquares = new Set(["d4", "e4", "d5", "e5"]);
 const extendedCenterSquares = new Set([
-    "c3", "d3", "e3", "f3",
-    "c4", "f4", "c5", "f5",
-    "c6", "d6", "e6", "f6",
+    "c3",
+    "d3",
+    "e3",
+    "f3",
+    "c4",
+    "f4",
+    "c5",
+    "f5",
+    "c6",
+    "d6",
+    "e6",
+    "f6",
 ]);
 
 /* ------------------------------------------------------------------ */
 /* ELO → engine parameters                                             */
 /* ------------------------------------------------------------------ */
 const engineParams = (elo) => {
-    // depth: how many plies to search
-    // noise: centipawn noise added per candidate move score (higher = weaker)
-    // blunderRate: probability of picking a random move from the bottom half
-    if (elo <= 800)  return { depth: 1, noise: 350, blunderRate: 0.45 };
-    if (elo <= 900)  return { depth: 1, noise: 280, blunderRate: 0.35 };
-    if (elo <= 1000) return { depth: 2, noise: 220, blunderRate: 0.28 };
-    if (elo <= 1100) return { depth: 2, noise: 170, blunderRate: 0.20 };
-    if (elo <= 1200) return { depth: 2, noise: 130, blunderRate: 0.14 };
-    if (elo <= 1300) return { depth: 3, noise: 100, blunderRate: 0.10 };
-    if (elo <= 1400) return { depth: 3, noise:  70, blunderRate: 0.07 };
-    if (elo <= 1500) return { depth: 3, noise:  45, blunderRate: 0.04 };
-    if (elo <= 1600) return { depth: 4, noise:  28, blunderRate: 0.02 };
-    if (elo <= 1800) return { depth: 4, noise:  15, blunderRate: 0.01 };
-    if (elo <= 2000) return { depth: 4, noise:   6, blunderRate: 0.00 };
-    if (elo <= 2200) return { depth: 5, noise:   3, blunderRate: 0.00 };
-    return                 { depth: 5, noise:   0, blunderRate: 0.00 };
+    // depth     — plies to search
+    // temperature — Boltzmann selection temperature in centipawns.
+    //               High = roughly uniform pick (weak), low = near-deterministic (strong).
+    //               Replaces the old noise+blunderRate combo with a single, smooth knob.
+    // simplicity — 0-1 bonus weight applied to human-instinct moves (captures, checks).
+    //               Simulates pattern recognition over deep calculation at low ELO.
+    // laziness   — 0-1 probability of searching at depth-1 instead of full depth per candidate.
+    //               Simulates inconsistent calculation: bot occasionally misses 2-move tactics.
+    if (elo <= 800)
+        return { depth: 1, temperature: 320, simplicity: 0.9, laziness: 0.6 };
+    if (elo <= 900)
+        return { depth: 1, temperature: 240, simplicity: 0.8, laziness: 0.5 };
+    if (elo <= 1000)
+        return { depth: 2, temperature: 180, simplicity: 0.7, laziness: 0.4 };
+    if (elo <= 1100)
+        return { depth: 2, temperature: 130, simplicity: 0.6, laziness: 0.3 };
+    if (elo <= 1200)
+        return { depth: 2, temperature: 100, simplicity: 0.45, laziness: 0.2 };
+    if (elo <= 1300)
+        return { depth: 3, temperature: 75, simplicity: 0.35, laziness: 0.15 };
+    if (elo <= 1400)
+        return { depth: 3, temperature: 55, simplicity: 0.25, laziness: 0.08 };
+    if (elo <= 1500)
+        return { depth: 3, temperature: 38, simplicity: 0.15, laziness: 0.04 };
+    if (elo <= 1600)
+        return { depth: 4, temperature: 22, simplicity: 0.07, laziness: 0.02 };
+    if (elo <= 1800)
+        return { depth: 4, temperature: 10, simplicity: 0.02, laziness: 0.0 };
+    if (elo <= 2000)
+        return { depth: 4, temperature: 4, simplicity: 0.0, laziness: 0.0 };
+    if (elo <= 2200)
+        return { depth: 5, temperature: 2, simplicity: 0.0, laziness: 0.0 };
+    return { depth: 5, temperature: 0, simplicity: 0.0, laziness: 0.0 };
 };
 
 export const useChessStore = defineStore("chess", () => {
@@ -113,7 +139,8 @@ export const useChessStore = defineStore("chess", () => {
     const _timeOut = (color) => {
         _stopClock();
         gamePhase.value = "over";
-        moveFeedback.value = color === playerColor.value ? "Time — you lost" : "Time — you win!";
+        moveFeedback.value =
+            color === playerColor.value ? "Time — you lost" : "Time — you win!";
     };
 
     /* ================================================================== */
@@ -128,7 +155,9 @@ export const useChessStore = defineStore("chess", () => {
     const viewCursor = ref(null);
 
     const isReviewing = computed(
-        () => viewCursor.value !== null && viewCursor.value < fullHistory.value.length - 1,
+        () =>
+            viewCursor.value !== null &&
+            viewCursor.value < fullHistory.value.length - 1,
     );
 
     /**
@@ -136,7 +165,10 @@ export const useChessStore = defineStore("chess", () => {
      * the position reconstructed at viewCursor.
      */
     const viewBoard = computed(() => {
-        if (viewCursor.value === null || viewCursor.value === fullHistory.value.length - 1) {
+        if (
+            viewCursor.value === null ||
+            viewCursor.value === fullHistory.value.length - 1
+        ) {
             return board.value;
         }
         // Replay up to cursor from initial position
@@ -162,12 +194,20 @@ export const useChessStore = defineStore("chess", () => {
     });
 
     const goTo = (index) => {
-        const clamped = Math.max(-1, Math.min(fullHistory.value.length - 1, index));
-        viewCursor.value = clamped === fullHistory.value.length - 1 ? null : clamped;
+        const clamped = Math.max(
+            -1,
+            Math.min(fullHistory.value.length - 1, index),
+        );
+        viewCursor.value =
+            clamped === fullHistory.value.length - 1 ? null : clamped;
     };
 
-    const returnToLive = () => { viewCursor.value = null; };
-    const goToStart = () => { goTo(-1); };
+    const returnToLive = () => {
+        viewCursor.value = null;
+    };
+    const goToStart = () => {
+        goTo(-1);
+    };
     const goBack = () => {
         const cur = viewCursor.value ?? fullHistory.value.length - 1;
         goTo(cur - 1);
@@ -191,29 +231,43 @@ export const useChessStore = defineStore("chess", () => {
         positionFen.value;
         if (gamePhase.value === "lobby") return "Not started";
         if (game.value.isCheckmate()) {
-            return game.value.turn() === playerColor.value ? "Checkmate — you lost" : "Checkmate — you win!";
+            return game.value.turn() === playerColor.value
+                ? "Checkmate — you lost"
+                : "Checkmate — you win!";
         }
         if (game.value.isDraw()) return "Draw";
         if (game.value.isCheck()) {
-            return game.value.turn() === playerColor.value ? "You are in check" : "Bot in check";
+            return game.value.turn() === playerColor.value
+                ? "You are in check"
+                : "Bot in check";
         }
         if (botThinking.value) return "Bot thinking…";
-        return game.value.turn() === playerColor.value ? "Your move" : "Bot to move";
+        return game.value.turn() === playerColor.value
+            ? "Your move"
+            : "Bot to move";
     });
 
     const gameTurnLabel = computed(() => {
         positionFen.value;
         if (gamePhase.value === "lobby") return "Configure & start";
         if (game.value.isCheckmate()) {
-            return game.value.turn() === playerColor.value ? "Bot wins by checkmate" : "You win by checkmate";
+            return game.value.turn() === playerColor.value
+                ? "Bot wins by checkmate"
+                : "You win by checkmate";
         }
         if (game.value.isDraw()) return "Game drawn";
         return game.value.turn() === "w" ? "White to move" : "Black to move";
     });
 
     const materialBalance = computed(() => {
-        const whiteLost = capturedWhite.value.reduce((t, p) => t + pieceValues[p], 0);
-        const blackLost = capturedBlack.value.reduce((t, p) => t + pieceValues[p], 0);
+        const whiteLost = capturedWhite.value.reduce(
+            (t, p) => t + pieceValues[p],
+            0,
+        );
+        const blackLost = capturedBlack.value.reduce(
+            (t, p) => t + pieceValues[p],
+            0,
+        );
         return Math.round(((blackLost - whiteLost) / 100) * 10) / 10;
     });
 
@@ -238,7 +292,13 @@ export const useChessStore = defineStore("chess", () => {
         return src.flatMap((rank, rowIndex) =>
             rank.map((piece, fileIndex) => {
                 const square = `${String.fromCharCode(97 + fileIndex)}${8 - rowIndex}`;
-                return { square, piece, rowIndex, fileIndex, dark: (rowIndex + fileIndex) % 2 === 1 };
+                return {
+                    square,
+                    piece,
+                    rowIndex,
+                    fileIndex,
+                    dark: (rowIndex + fileIndex) % 2 === 1,
+                };
             }),
         );
     });
@@ -252,7 +312,12 @@ export const useChessStore = defineStore("chess", () => {
         if (!game.value.isCheck()) return null;
         const turn = game.value.turn();
         for (const tile of flattenedBoard.value) {
-            if (tile.piece && tile.piece.type === "k" && tile.piece.color === turn) return tile.square;
+            if (
+                tile.piece &&
+                tile.piece.type === "k" &&
+                tile.piece.color === turn
+            )
+                return tile.square;
         }
         return null;
     });
@@ -269,10 +334,18 @@ export const useChessStore = defineStore("chess", () => {
     };
 
     const classifyMove = (move, side) => {
-        if (move.san.includes("#")) return side === "player" ? "Checkmate landed" : "Engine delivers mate";
-        if (move.san.includes("+")) return side === "player" ? "Forcing check" : "Bot creates pressure";
-        if (move.captured)          return side === "player" ? "Material captured" : "Bot wins material";
-        if (centerSquares.has(move.to)) return side === "player" ? "Center control" : "Bot contests center";
+        if (move.san.includes("#"))
+            return side === "player"
+                ? "Checkmate landed"
+                : "Engine delivers mate";
+        if (move.san.includes("+"))
+            return side === "player" ? "Forcing check" : "Bot creates pressure";
+        if (move.captured)
+            return side === "player"
+                ? "Material captured"
+                : "Bot wins material";
+        if (centerSquares.has(move.to))
+            return side === "player" ? "Center control" : "Bot contests center";
         return side === "player" ? "Position improved" : "Bot develops";
     };
 
@@ -293,7 +366,12 @@ export const useChessStore = defineStore("chess", () => {
         });
         // Keep view cursor tracking live
         viewCursor.value = null;
-        lastPlayedMove.value = { from: move.from, to: move.to, flags: move.flags, color: move.color };
+        lastPlayedMove.value = {
+            from: move.from,
+            to: move.to,
+            flags: move.flags,
+            color: move.color,
+        };
         _applyIncrement(move.color);
         playForMove(move, game.value.isGameOver());
     };
@@ -311,7 +389,8 @@ export const useChessStore = defineStore("chess", () => {
             botThinking.value ||
             game.value.isGameOver() ||
             game.value.turn() !== playerColor.value
-        ) return;
+        )
+            return;
 
         if (tile.piece?.color === playerColor.value) {
             selectedSquare.value = tile.square;
@@ -326,7 +405,11 @@ export const useChessStore = defineStore("chess", () => {
     };
 
     const makePlayerMove = (target) => {
-        const move = game.value.move({ from: selectedSquare.value, to: target, promotion: "q" });
+        const move = game.value.move({
+            from: selectedSquare.value,
+            to: target,
+            promotion: "q",
+        });
         if (!move) {
             selectedSquare.value = null;
             legalTargets.value = [];
@@ -366,48 +449,115 @@ export const useChessStore = defineStore("chess", () => {
     /* ================================================================== */
 
     /**
-     * Human-like delay: scales inversely with ELO so weaker bots "think"
-     * longer (hesitant) and stronger bots respond faster but not instantly.
+     * Human-like delay with four contributing factors:
+     *  1. Base think time  — weaker bots are more hesitant / slower
+     *  2. Complexity bonus — more legal moves in position → longer think (choice paralysis)
+     *  3. Recapture speed  — if the player just captured, bot often replies fast (~65% of time)
+     *  4. Long-think spike — ~8% chance of a longer pause (re-evaluating the position)
+     *  5. Clock pressure   — timed game with < 30 s left → bot hurries
      */
     const botDelay = () => {
-        const base = 600 - Math.floor(elo.value / 5);      // 440ms @ 1200, 200ms @ 2000
-        const jitter = Math.random() * 300;                 // ±0..300ms randomness
-        return Math.max(200, Math.min(1200, base + jitter));
+        const moveCount = game.value.moves().length;
+
+        // Base: weaker bots think longer (more confused), stronger bots are quicker
+        const base = Math.max(250, 850 - Math.floor(elo.value / 4));
+
+        // Position complexity: paralysis of choice
+        const complexityBonus = Math.min(350, moveCount * 7);
+
+        // Recapture instinct: respond quickly after the player takes a piece
+        const justCaptured =
+            lastPlayedMove.value?.flags?.includes("c") ||
+            lastPlayedMove.value?.flags?.includes("e");
+        const recaptureRatio =
+            justCaptured && Math.random() < 0.65 ? 0.35 : 1.0;
+
+        // Rare long think: re-evaluating a critical position
+        const spike = Math.random() < 0.08 ? 1400 + Math.random() * 2200 : 0;
+
+        // Natural variance
+        const variance = Math.random() * 450;
+
+        // Clock pressure: hurry when low on time
+        const botColor = playerColor.value === "w" ? "b" : "w";
+        const clockRatio =
+            timeControl.value && clocks.value[botColor] < 30 ? 0.4 : 1.0;
+
+        const total =
+            (base + complexityBonus + variance + spike) *
+            recaptureRatio *
+            clockRatio;
+        return Math.max(180, Math.min(5500, total));
     };
 
     const chooseBotMove = () => {
         const moves = game.value.moves({ verbose: true });
         if (moves.length === 0) return null;
 
-        const { depth, noise, blunderRate } = engineParams(elo.value);
+        const { depth, temperature, simplicity, laziness } = engineParams(
+            elo.value,
+        );
+        // bot = side opposite the player
+        const botIsBlack = playerColor.value === "w";
 
-        // Occasional blunder: pick randomly from worst half of moves
-        if (blunderRate > 0 && Math.random() < blunderRate) {
-            const n = Math.max(1, Math.ceil(moves.length / 2));
-            // We still score to get the ordering, then pick from bottom
-            const scored = moves.map((move) => {
-                game.value.move(move);
-                const score = minimax(Math.max(1, depth - 1), -Infinity, Infinity, true);
-                game.value.undo();
-                return { move, score };
-            });
-            scored.sort((a, b) => a.score - b.score);
-            return scored[Math.floor(Math.random() * n)].move;
-        }
-
+        // Score each candidate move
         const scored = moves.map((move) => {
+            // Laziness: occasionally search one ply shallower → misses some 2-move tactics
+            const searchDepth =
+                laziness > 0 && Math.random() < laziness
+                    ? Math.max(0, depth - 1)
+                    : depth;
+
             game.value.move(move);
-            const score = minimax(depth - 1, -Infinity, Infinity, true);
+            const rawScore = minimax(
+                searchDepth - 1,
+                -Infinity,
+                Infinity,
+                !botIsBlack,
+            );
             game.value.undo();
-            // Add symmetric noise to evaluation
-            return { move, score: score + (Math.random() * noise * 2 - noise) };
+
+            // Simplicity bias: bonus for human-instinct moves so mid-ELO bots
+            // prefer captures and checks the way real players do.
+            // Sign is from bot's perspective (positive = good for bot).
+            const sign = botIsBlack ? -1 : 1;
+            const captureBonus = move.captured ? simplicity * 45 * sign : 0;
+            const checkBonus =
+                move.san.includes("+") || move.san.includes("#")
+                    ? simplicity * 22 * sign
+                    : 0;
+
+            return { move, score: rawScore + captureBonus + checkBonus };
         });
 
-        // Bot plays as the side opposite the player
-        // If player = white, bot = black → minimize; if player = black, bot = white → maximize
-        const botIsBlack = playerColor.value === "w";
-        scored.sort((a, b) => botIsBlack ? a.score - b.score : b.score - a.score);
-        return scored[0].move;
+        // --- Boltzmann (softmax) selection ---
+        // temperature = 0  → deterministic best move (engine-like)
+        // temperature > 0  → probabilistic; higher T = more varied, human-like selection
+        if (temperature === 0) {
+            return scored.reduce((best, s) =>
+                (botIsBlack ? s.score < best.score : s.score > best.score)
+                    ? s
+                    : best,
+            ).move;
+        }
+
+        // Convert raw eval to "bot advantage" (higher = better for bot)
+        const botAdvantage = scored.map((s) =>
+            botIsBlack ? -s.score : s.score,
+        );
+        // Shift by max to keep exp() numerically stable
+        const maxAdv = Math.max(...botAdvantage);
+        const weights = botAdvantage.map((adv) =>
+            Math.exp((adv - maxAdv) / temperature),
+        );
+
+        const total = weights.reduce((a, b) => a + b, 0);
+        let rand = Math.random() * total;
+        for (let i = 0; i < scored.length; i++) {
+            rand -= weights[i];
+            if (rand <= 0) return scored[i].move;
+        }
+        return scored[scored.length - 1].move; // numerical fallback
     };
 
     const minimax = (depth, alpha, beta, maxWhite) => {
@@ -436,16 +586,24 @@ export const useChessStore = defineStore("chess", () => {
     };
 
     const evaluatePosition = () => {
-        if (game.value.isCheckmate()) return game.value.turn() === "w" ? -100000 : 100000;
+        if (game.value.isCheckmate())
+            return game.value.turn() === "w" ? -100000 : 100000;
         if (game.value.isDraw()) return 0;
         let score = 0;
         for (const tile of game.value.board().flat()) {
             if (!tile) continue;
-            const bonus = centerSquares.has(tile.square) ? 18
-                : extendedCenterSquares.has(tile.square) ? 8 : 0;
-            score += (pieceValues[tile.type] + bonus) * (tile.color === "w" ? 1 : -1);
+            const bonus = centerSquares.has(tile.square)
+                ? 18
+                : extendedCenterSquares.has(tile.square)
+                  ? 8
+                  : 0;
+            score +=
+                (pieceValues[tile.type] + bonus) *
+                (tile.color === "w" ? 1 : -1);
         }
-        score += game.value.moves({ verbose: true }).length * (game.value.turn() === "w" ? 1.5 : -1.5);
+        score +=
+            game.value.moves({ verbose: true }).length *
+            (game.value.turn() === "w" ? 1.5 : -1.5);
         return score;
     };
 
@@ -461,7 +619,10 @@ export const useChessStore = defineStore("chess", () => {
     };
 
     const _resetBoard = () => {
-        if (botTimer) { clearTimeout(botTimer); botTimer = null; }
+        if (botTimer) {
+            clearTimeout(botTimer);
+            botTimer = null;
+        }
         _stopClock();
         game.value = new Chess();
         board.value = game.value.board();
@@ -494,7 +655,10 @@ export const useChessStore = defineStore("chess", () => {
         _resetBoard();
         // Init clocks
         if (timeControl.value) {
-            clocks.value = { w: timeControl.value.base, b: timeControl.value.base };
+            clocks.value = {
+                w: timeControl.value.base,
+                b: timeControl.value.base,
+            };
         }
         gamePhase.value = "playing";
         moveFeedback.value = "Game started";

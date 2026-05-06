@@ -46,6 +46,9 @@ export const useChessStore = defineStore("chess", () => {
      */
     const lastPlayedMove = ref(null);
 
+    /** Holds the pending setTimeout ID for the bot's next move. */
+    let botTimer = null;
+
     /* ------------------------------------------------------------------ */
     /* Computed                                                             */
     /* ------------------------------------------------------------------ */
@@ -145,6 +148,12 @@ export const useChessStore = defineStore("chess", () => {
         return null;
     });
 
+    /**
+     * True when no moves have been played yet — the player is free to
+     * flip sides. Becomes false the moment any piece moves.
+     */
+    const canSwitchColor = computed(() => moveHistory.value.length === 0);
+
     /* ------------------------------------------------------------------ */
     /* Internal helpers                                                     */
     /* ------------------------------------------------------------------ */
@@ -227,7 +236,7 @@ export const useChessStore = defineStore("chess", () => {
 
         if (!game.value.isGameOver()) {
             botThinking.value = true;
-            window.setTimeout(makeBotMove, botDelay());
+            botTimer = window.setTimeout(makeBotMove, botDelay());
         }
     };
 
@@ -320,7 +329,19 @@ export const useChessStore = defineStore("chess", () => {
     /* ------------------------------------------------------------------ */
     /* Game lifecycle                                                       */
     /* ------------------------------------------------------------------ */
+    const _triggerBotFirst = () => {
+        botThinking.value = true;
+        botTimer = window.setTimeout(() => {
+            makeBotMove();
+            botTimer = null;
+        }, botDelay());
+    };
+
     const newGame = () => {
+        if (botTimer) {
+            clearTimeout(botTimer);
+            botTimer = null;
+        }
         game.value = new Chess();
         selectedSquare.value = null;
         legalTargets.value = [];
@@ -331,11 +352,29 @@ export const useChessStore = defineStore("chess", () => {
         botThinking.value = false;
         lastPlayedMove.value = null;
         syncBoard();
+        if (playerColor.value === "b") _triggerBotFirst();
     };
 
     const resign = () => {
         moveFeedback.value = "Training line reset";
         newGame();
+    };
+
+    /**
+     * Toggle the side the human plays. Only works while no moves have been
+     * made (canSwitchColor). Cancels any pending bot-opening move so the
+     * player can flip back to white after choosing black.
+     */
+    const switchColor = () => {
+        if (!canSwitchColor.value) return;
+        // Cancel any bot-opening move queued by a previous black selection.
+        if (botTimer) {
+            clearTimeout(botTimer);
+            botTimer = null;
+            botThinking.value = false;
+        }
+        playerColor.value = playerColor.value === "w" ? "b" : "w";
+        if (playerColor.value === "b") _triggerBotFirst();
     };
 
     /* ------------------------------------------------------------------ */
@@ -367,10 +406,12 @@ export const useChessStore = defineStore("chess", () => {
         flattenedBoard,
         legalTargetSet,
         kingInCheckSquare,
+        canSwitchColor,
         // Actions
         selectSquare,
         botDelay,
         newGame,
         resign,
+        switchColor,
     };
 });

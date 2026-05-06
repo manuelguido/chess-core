@@ -1,5 +1,6 @@
 <script setup>
 import {
+    computed,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -43,10 +44,13 @@ onBeforeUnmount(() => {
 const fileIdx = (sq) => sq.charCodeAt(0) - 97;
 const rankRow = (sq) => 8 - parseInt(sq[1], 10);
 
-const offsetFor = (from, to) => ({
-    dx: (fileIdx(from) - fileIdx(to)) * squarePx.value,
-    dy: (rankRow(from) - rankRow(to)) * squarePx.value,
-});
+const offsetFor = (from, to) => {
+    const sign = boardFlipped.value ? -1 : 1;
+    return {
+        dx: sign * (fileIdx(from) - fileIdx(to)) * squarePx.value,
+        dy: sign * (rankRow(from) - rankRow(to)) * squarePx.value,
+    };
+};
 
 const scheduleAnimation = (move) => {
     const next = new Map();
@@ -81,6 +85,22 @@ watch(
 );
 
 /* ============================================================
+   Board perspective
+   ============================================================ */
+const boardFlipped = computed(() => chess.playerColor === "b");
+
+/**
+ * Reversing the 64 display tiles puts rank 1 at the top and file h
+ * on the left — i.e. black's perspective. The underlying square
+ * names ("e4", etc.) are unchanged, so all game logic still works.
+ */
+const displayTiles = computed(() =>
+    boardFlipped.value
+        ? [...chess.flattenedBoard].reverse()
+        : chess.flattenedBoard,
+);
+
+/* ============================================================
    Tile styling
    ============================================================ */
 const tileClasses = (tile) => {
@@ -112,7 +132,7 @@ const tileClasses = (tile) => {
             aria-label="Chess board"
         >
             <button
-                v-for="tile in chess.flattenedBoard"
+                v-for="tile in displayTiles"
                 :key="tile.square"
                 type="button"
                 role="gridcell"
@@ -138,10 +158,16 @@ const tileClasses = (tile) => {
                     :color="tile.piece.color"
                     :type="tile.piece.type"
                 />
-                <span v-if="tile.fileIndex === 0" class="coord coord--rank">
+                <span
+                    v-if="boardFlipped ? tile.fileIndex === 7 : tile.fileIndex === 0"
+                    class="coord coord--rank"
+                >
                     {{ tile.square[1] }}
                 </span>
-                <span v-if="tile.rowIndex === 7" class="coord coord--file">
+                <span
+                    v-if="boardFlipped ? tile.rowIndex === 0 : tile.rowIndex === 7"
+                    class="coord coord--file"
+                >
                     {{ tile.square[0] }}
                 </span>
             </button>

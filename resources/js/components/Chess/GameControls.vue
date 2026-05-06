@@ -10,10 +10,42 @@ const chess = useChessStore();
         <p class="meta">
             <span class="text-ink">{{ chess.gameTurnLabel }}</span>
             <span class="mx-2 text-ink-faint">·</span>
-            <span>You play white</span>
+            <span>You play {{ chess.playerColor === "w" ? "white" : "black" }}</span>
         </p>
 
-        <div class="flex gap-2">
+        <div class="flex items-center gap-2">
+            <!-- Side selector — only interactive before the first move -->
+            <div class="flex overflow-hidden rounded-md border border-line-soft">
+                <button
+                    type="button"
+                    class="px-3 py-1.5 text-xs font-medium transition-colors duration-150"
+                    :class="
+                        chess.playerColor === 'w'
+                            ? 'bg-bg-elevated text-ink'
+                            : chess.canSwitchColor
+                              ? 'bg-bg-surface text-ink-faint hover:text-ink'
+                              : 'bg-bg-surface text-ink-faint opacity-40 cursor-not-allowed'
+                    "
+                    @click="chess.playerColor !== 'w' && chess.switchColor()"
+                >
+                    ♔ White
+                </button>
+                <button
+                    type="button"
+                    class="border-l border-line-soft px-3 py-1.5 text-xs font-medium transition-colors duration-150"
+                    :class="
+                        chess.playerColor === 'b'
+                            ? 'bg-bg-elevated text-ink'
+                            : chess.canSwitchColor
+                              ? 'bg-bg-surface text-ink-faint hover:text-ink'
+                              : 'bg-bg-surface text-ink-faint opacity-40 cursor-not-allowed'
+                    "
+                    @click="chess.playerColor !== 'b' && chess.switchColor()"
+                >
+                    ♚ Black
+                </button>
+            </div>
+
             <button class="btn btn--ghost" type="button" @click="chess.resign">
                 <Flag class="h-3.5 w-3.5" :stroke-width="1.75" />
                 Reset line

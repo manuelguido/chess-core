@@ -1,0 +1,132 @@
+name: Code Quality & Auto Fix
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+      - 'feat/*'
+      - 'fix/*'
+      - 'hotfix/*'
+    paths:
+      - '**/*.php'
+      - '**/*.js'
+      - '**/*.jsx'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.vue'
+      - 'resources/css/**/*.css'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.php-cs-fixer.php'
+      - 'eslint.config.js'
+      - '.prettierrc'
+      - '.github/workflows/code-quality.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: code-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auto-fix:
+    name: Auto Fix Code Style
+    runs-on: ubuntu-latest
+
+    # evita loop infinito cuando el bot hace commit
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      #
+      # PHP
+      #
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer
+
+      - name: Install PHP Dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Generate Wayfinder Types
+        run: php artisan wayfinder:generate --with-form --no-interaction
+
+      #
+      # Node
+      #
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      #
+      # PHP Fixes
+      #
+      - name: Run Laravel Pint
+        run: composer lint
+
+      #
+      # Frontend Fixes
+      #
+      - name: Run ESLint Auto Fix
+        run: npm run lint:fix
+
+      - name: Run Prettier Format
+        run: npm run format
+
+      #
+      # Optional typecheck
+      # (no falla workflow)
+      #
+      - name: Type Check
+        run: npm run type-check || true
+
+      #
+      # Commit changes
+      #
+      - name: Commit Changes
+        id: commit_changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "style: automatic code quality fixes [skip ci]"
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      #
+      # Push changes
+      #
+      - name: Push Changes
+        if: steps.commit_changes.outputs.changed == 'true'
+        run: |
+          git push origin HEAD:${GITHUB_REF_NAME}

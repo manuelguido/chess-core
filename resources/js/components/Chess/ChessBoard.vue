@@ -1,13 +1,7 @@
 <script setup>
-import {
-    computed,
-    onBeforeUnmount,
-    onMounted,
-    ref,
-    watch,
-} from "vue";
-import ChessPiece from "../ChessPiece.vue";
-import { useChessStore } from "../../stores/useChessStore.js";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import ChessPiece from '../ChessPiece.vue';
+import { useChessStore } from '../../stores/useChessStore.js';
 
 const chess = useChessStore();
 
@@ -30,7 +24,7 @@ const measureBoard = () => {
 
 onMounted(() => {
     measureBoard();
-    if (typeof ResizeObserver !== "undefined" && boardEl.value) {
+    if (typeof ResizeObserver !== 'undefined' && boardEl.value) {
         boardRO = new ResizeObserver(measureBoard);
         boardRO.observe(boardEl.value);
     }
@@ -58,11 +52,11 @@ const scheduleAnimation = (move) => {
     next.set(move.to, { dx, dy, id: ++animSeq });
 
     // Castling: animate the rook leg too
-    if (move.flags && (move.flags.includes("k") || move.flags.includes("q"))) {
-        const rank = move.color === "w" ? "1" : "8";
-        const isKingside = move.flags.includes("k");
-        const rookFrom = (isKingside ? "h" : "a") + rank;
-        const rookTo = (isKingside ? "f" : "d") + rank;
+    if (move.flags && (move.flags.includes('k') || move.flags.includes('q'))) {
+        const rank = move.color === 'w' ? '1' : '8';
+        const isKingside = move.flags.includes('k');
+        const rookFrom = (isKingside ? 'h' : 'a') + rank;
+        const rookTo = (isKingside ? 'f' : 'd') + rank;
         const r = offsetFor(rookFrom, rookTo);
         next.set(rookTo, { dx: r.dx, dy: r.dy, id: ++animSeq });
     }
@@ -87,7 +81,7 @@ watch(
 /* ============================================================
    Board perspective
    ============================================================ */
-const boardFlipped = computed(() => chess.playerColor === "b");
+const boardFlipped = computed(() => chess.playerColor === 'b');
 
 /**
  * Reversing the 64 display tiles puts rank 1 at the top and file h
@@ -104,33 +98,30 @@ const displayTiles = computed(() =>
    Tile styling
    ============================================================ */
 const tileClasses = (tile) => {
-    const isSelected = !chess.isReviewing && chess.selectedSquare === tile.square;
-    const isTarget = !chess.isReviewing && chess.legalTargetSet.has(tile.square);
+    const isSelected =
+        !chess.isReviewing && chess.selectedSquare === tile.square;
+    const isTarget =
+        !chess.isReviewing && chess.legalTargetSet.has(tile.square);
     const isLast =
         chess.viewLastMove &&
         (chess.viewLastMove.from === tile.square ||
             chess.viewLastMove.to === tile.square);
 
     return [
-        "square",
-        tile.dark ? "square--dark" : "square--light",
-        isSelected && "square--selected",
-        isTarget && "square--target",
-        isTarget && tile.piece && "square--has-piece",
-        isLast && "square--last",
-        chess.kingInCheckSquare === tile.square && "square--check",
+        'square',
+        tile.dark ? 'square--dark' : 'square--light',
+        isSelected && 'square--selected',
+        isTarget && 'square--target',
+        isTarget && tile.piece && 'square--has-piece',
+        isLast && 'square--last',
+        chess.kingInCheckSquare === tile.square && 'square--check',
     ];
 };
 </script>
 
 <template>
     <div class="board-frame w-full max-w-180">
-        <div
-            ref="boardEl"
-            class="board"
-            role="grid"
-            aria-label="Chess board"
-        >
+        <div ref="boardEl" class="board" role="grid" aria-label="Chess board">
             <button
                 v-for="tile in displayTiles"
                 :key="tile.square"
@@ -150,8 +141,10 @@ const tileClasses = (tile) => {
                     :style="
                         animations.get(tile.square)
                             ? {
-                                  '--mv-x': animations.get(tile.square).dx + 'px',
-                                  '--mv-y': animations.get(tile.square).dy + 'px',
+                                  '--mv-x':
+                                      animations.get(tile.square).dx + 'px',
+                                  '--mv-y':
+                                      animations.get(tile.square).dy + 'px',
                               }
                             : null
                     "
@@ -159,13 +152,19 @@ const tileClasses = (tile) => {
                     :type="tile.piece.type"
                 />
                 <span
-                    v-if="boardFlipped ? tile.fileIndex === 7 : tile.fileIndex === 0"
+                    v-if="
+                        boardFlipped
+                            ? tile.fileIndex === 7
+                            : tile.fileIndex === 0
+                    "
                     class="coord coord--rank"
                 >
                     {{ tile.square[1] }}
                 </span>
                 <span
-                    v-if="boardFlipped ? tile.rowIndex === 0 : tile.rowIndex === 7"
+                    v-if="
+                        boardFlipped ? tile.rowIndex === 0 : tile.rowIndex === 7
+                    "
                     class="coord coord--file"
                 >
                     {{ tile.square[0] }}

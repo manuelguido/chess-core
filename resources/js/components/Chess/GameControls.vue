@@ -1,6 +1,6 @@
 <script setup>
-import { Flag, Play, RotateCcw } from "lucide-vue-next";
-import { useChessStore } from "../../stores/useChessStore.js";
+import { Flag, Play, RotateCcw } from 'lucide-vue-next';
+import { useChessStore } from '../../stores/useChessStore.js';
 
 const chess = useChessStore();
 </script>
@@ -10,14 +10,17 @@ const chess = useChessStore();
         <p class="meta">
             <span class="text-ink">{{ chess.gameTurnLabel }}</span>
             <span class="mx-2 text-ink-faint">·</span>
-            <span>You play {{ chess.playerColor === "w" ? "white" : "black" }}</span>
+            <span
+                >You play
+                {{ chess.playerColor === 'w' ? 'white' : 'black' }}</span
+            >
         </p>
 
         <div class="flex items-center gap-2">
             <!-- Side selector — only interactive in lobby -->
             <div
                 class="flex overflow-hidden rounded-md border border-line-soft transition-opacity"
-                :class="chess.configLocked && 'opacity-40 pointer-events-none'"
+                :class="chess.configLocked && 'pointer-events-none opacity-40'"
             >
                 <button
                     type="button"

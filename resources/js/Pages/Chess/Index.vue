@@ -1,17 +1,17 @@
 <script setup>
-import { useChessStore } from "../../stores/useChessStore.js";
-import { Head } from "@inertiajs/vue3";
-import { BrainCircuit, Crown } from "lucide-vue-next";
-import BotStrengthPanel from "../../components/Chess/BotStrengthPanel.vue";
-import CapturedPanel from "../../components/Chess/CapturedPanel.vue";
-import TimeControlPanel from "../../components/Chess/TimeControlPanel.vue";
-import StatusStrip from "../../components/Chess/StatusStrip.vue";
-import ClockDisplay from "../../components/Chess/ClockDisplay.vue";
-import ChessBoard from "../../components/Chess/ChessBoard.vue";
-import GameControls from "../../components/Chess/GameControls.vue";
-import GameInfoPanel from "../../components/Chess/GameInfoPanel.vue";
-import MoveHistoryPanel from "../../components/Chess/MoveHistoryPanel.vue";
-import PositionPanel from "../../components/Chess/PositionPanel.vue";
+import { useChessStore } from '../../stores/useChessStore.js';
+import { Head } from '@inertiajs/vue3';
+import { BrainCircuit, Crown } from 'lucide-vue-next';
+import BotStrengthPanel from '../../components/Chess/BotStrengthPanel.vue';
+import CapturedPanel from '../../components/Chess/CapturedPanel.vue';
+import TimeControlPanel from '../../components/Chess/TimeControlPanel.vue';
+import StatusStrip from '../../components/Chess/StatusStrip.vue';
+import ClockDisplay from '../../components/Chess/ClockDisplay.vue';
+import ChessBoard from '../../components/Chess/ChessBoard.vue';
+import GameControls from '../../components/Chess/GameControls.vue';
+import GameInfoPanel from '../../components/Chess/GameInfoPanel.vue';
+import MoveHistoryPanel from '../../components/Chess/MoveHistoryPanel.vue';
+import PositionPanel from '../../components/Chess/PositionPanel.vue';
 
 const props = defineProps({
     botProfiles: Array,
@@ -36,7 +36,10 @@ chess.botProfiles = props.botProfiles;
                     <span
                         class="flex h-9 w-9 items-center justify-center rounded-md border border-line-soft bg-bg-surface"
                     >
-                        <Crown class="h-4 w-4 text-accent" :stroke-width="1.75" />
+                        <Crown
+                            class="h-4 w-4 text-accent"
+                            :stroke-width="1.75"
+                        />
                     </span>
                     <div class="flex flex-col leading-tight">
                         <h1>Chess Core</h1>
@@ -45,10 +48,15 @@ chess.botProfiles = props.botProfiles;
 
                 <div class="flex items-center gap-2">
                     <span class="pill">
-                        <BrainCircuit class="h-3.5 w-3.5" :stroke-width="1.75" />
+                        <BrainCircuit
+                            class="h-3.5 w-3.5"
+                            :stroke-width="1.75"
+                        />
                         {{ chess.activeProfile?.name }}
                     </span>
-                    <span class="pill pill--accent num">{{ chess.elo }} ELO</span>
+                    <span class="pill pill--accent num"
+                        >{{ chess.elo }} ELO</span
+                    >
                 </div>
             </header>
 

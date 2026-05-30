@@ -1,23 +1,23 @@
-import { defineStore } from "pinia";
-import { computed, ref, shallowRef } from "vue";
-import { Chess } from "chess.js";
-import { useChessSound } from "../composables/useChessSound.js";
+import { defineStore } from 'pinia';
+import { computed, ref, shallowRef } from 'vue';
+import { Chess } from 'chess.js';
+import { useChessSound } from '../composables/useChessSound.js';
 
 const pieceValues = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
-const centerSquares = new Set(["d4", "e4", "d5", "e5"]);
+const centerSquares = new Set(['d4', 'e4', 'd5', 'e5']);
 const extendedCenterSquares = new Set([
-    "c3",
-    "d3",
-    "e3",
-    "f3",
-    "c4",
-    "f4",
-    "c5",
-    "f5",
-    "c6",
-    "d6",
-    "e6",
-    "f6",
+    'c3',
+    'd3',
+    'e3',
+    'f3',
+    'c4',
+    'f4',
+    'c5',
+    'f5',
+    'c6',
+    'd6',
+    'e6',
+    'f6',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -59,7 +59,7 @@ const engineParams = (elo) => {
     return { depth: 5, temperature: 0, simplicity: 0.0, laziness: 0.0 };
 };
 
-export const useChessStore = defineStore("chess", () => {
+export const useChessStore = defineStore('chess', () => {
     const { playForMove } = useChessSound();
 
     /* ================================================================== */
@@ -68,10 +68,10 @@ export const useChessStore = defineStore("chess", () => {
     const botProfiles = ref([]); // server props, display only
 
     /** 'lobby' | 'playing' | 'over' */
-    const gamePhase = ref("lobby");
+    const gamePhase = ref('lobby');
 
     const elo = ref(1200);
-    const playerColor = ref("w");
+    const playerColor = ref('w');
 
     /**
      * Time control: base in seconds, increment in seconds.
@@ -79,7 +79,7 @@ export const useChessStore = defineStore("chess", () => {
      */
     const timeControl = ref({ base: 180, increment: 0 }); // 3+0
 
-    const configLocked = computed(() => gamePhase.value !== "lobby");
+    const configLocked = computed(() => gamePhase.value !== 'lobby');
 
     /* ================================================================== */
     /* SECTION B — Active game state                                       */
@@ -92,7 +92,7 @@ export const useChessStore = defineStore("chess", () => {
     const capturedWhite = ref([]);
     const capturedBlack = ref([]);
     const lastMove = ref(null);
-    const moveFeedback = ref("Ready");
+    const moveFeedback = ref('Ready');
     const positionFen = ref(game.value.fen());
     const currentMoveNumber = ref(game.value.moveNumber());
 
@@ -117,7 +117,7 @@ export const useChessStore = defineStore("chess", () => {
         if (!timeControl.value) return;
         if (clockInterval) return;
         clockInterval = setInterval(() => {
-            if (gamePhase.value !== "playing") return _stopClock();
+            if (gamePhase.value !== 'playing') return _stopClock();
             const turn = game.value.turn();
             clocks.value[turn] = Math.max(0, clocks.value[turn] - 1);
             if (clocks.value[turn] === 0) _timeOut(turn);
@@ -138,9 +138,9 @@ export const useChessStore = defineStore("chess", () => {
 
     const _timeOut = (color) => {
         _stopClock();
-        gamePhase.value = "over";
+        gamePhase.value = 'over';
         moveFeedback.value =
-            color === playerColor.value ? "Time — you lost" : "Time — you win!";
+            color === playerColor.value ? 'Time — you lost' : 'Time — you win!';
     };
 
     /* ================================================================== */
@@ -229,34 +229,34 @@ export const useChessStore = defineStore("chess", () => {
 
     const status = computed(() => {
         positionFen.value;
-        if (gamePhase.value === "lobby") return "Not started";
+        if (gamePhase.value === 'lobby') return 'Not started';
         if (game.value.isCheckmate()) {
             return game.value.turn() === playerColor.value
-                ? "Checkmate — you lost"
-                : "Checkmate — you win!";
+                ? 'Checkmate — you lost'
+                : 'Checkmate — you win!';
         }
-        if (game.value.isDraw()) return "Draw";
+        if (game.value.isDraw()) return 'Draw';
         if (game.value.isCheck()) {
             return game.value.turn() === playerColor.value
-                ? "You are in check"
-                : "Bot in check";
+                ? 'You are in check'
+                : 'Bot in check';
         }
-        if (botThinking.value) return "Bot thinking…";
+        if (botThinking.value) return 'Bot thinking…';
         return game.value.turn() === playerColor.value
-            ? "Your move"
-            : "Bot to move";
+            ? 'Your move'
+            : 'Bot to move';
     });
 
     const gameTurnLabel = computed(() => {
         positionFen.value;
-        if (gamePhase.value === "lobby") return "Configure & start";
+        if (gamePhase.value === 'lobby') return 'Configure & start';
         if (game.value.isCheckmate()) {
             return game.value.turn() === playerColor.value
-                ? "Bot wins by checkmate"
-                : "You win by checkmate";
+                ? 'Bot wins by checkmate'
+                : 'You win by checkmate';
         }
-        if (game.value.isDraw()) return "Game drawn";
-        return game.value.turn() === "w" ? "White to move" : "Black to move";
+        if (game.value.isDraw()) return 'Game drawn';
+        return game.value.turn() === 'w' ? 'White to move' : 'Black to move';
     });
 
     const materialBalance = computed(() => {
@@ -280,7 +280,7 @@ export const useChessStore = defineStore("chess", () => {
                 number: i / 2 + 1,
                 white: history[i],
                 whiteIdx: i,
-                black: history[i + 1] ?? "",
+                black: history[i + 1] ?? '',
                 blackIdx: i + 1 < history.length ? i + 1 : null,
             });
         }
@@ -314,7 +314,7 @@ export const useChessStore = defineStore("chess", () => {
         for (const tile of flattenedBoard.value) {
             if (
                 tile.piece &&
-                tile.piece.type === "k" &&
+                tile.piece.type === 'k' &&
                 tile.piece.color === turn
             )
                 return tile.square;
@@ -322,7 +322,7 @@ export const useChessStore = defineStore("chess", () => {
         return null;
     });
 
-    const canSwitchColor = computed(() => gamePhase.value === "lobby");
+    const canSwitchColor = computed(() => gamePhase.value === 'lobby');
 
     /* ================================================================== */
     /* SECTION F — Internal helpers                                        */
@@ -334,24 +334,24 @@ export const useChessStore = defineStore("chess", () => {
     };
 
     const classifyMove = (move, side) => {
-        if (move.san.includes("#"))
-            return side === "player"
-                ? "Checkmate landed"
-                : "Engine delivers mate";
-        if (move.san.includes("+"))
-            return side === "player" ? "Forcing check" : "Bot creates pressure";
+        if (move.san.includes('#'))
+            return side === 'player'
+                ? 'Checkmate landed'
+                : 'Engine delivers mate';
+        if (move.san.includes('+'))
+            return side === 'player' ? 'Forcing check' : 'Bot creates pressure';
         if (move.captured)
-            return side === "player"
-                ? "Material captured"
-                : "Bot wins material";
+            return side === 'player'
+                ? 'Material captured'
+                : 'Bot wins material';
         if (centerSquares.has(move.to))
-            return side === "player" ? "Center control" : "Bot contests center";
-        return side === "player" ? "Position improved" : "Bot develops";
+            return side === 'player' ? 'Center control' : 'Bot contests center';
+        return side === 'player' ? 'Position improved' : 'Bot develops';
     };
 
     const registerMove = (move, side) => {
         if (move.captured) {
-            if (move.color === "w") capturedBlack.value.push(move.captured);
+            if (move.color === 'w') capturedBlack.value.push(move.captured);
             else capturedWhite.value.push(move.captured);
         }
         lastMove.value = { from: move.from, to: move.to };
@@ -385,7 +385,7 @@ export const useChessStore = defineStore("chess", () => {
         // Ignore clicks while reviewing history, not playing, bot thinking, or game over
         if (
             isReviewing.value ||
-            gamePhase.value !== "playing" ||
+            gamePhase.value !== 'playing' ||
             botThinking.value ||
             game.value.isGameOver() ||
             game.value.turn() !== playerColor.value
@@ -408,20 +408,20 @@ export const useChessStore = defineStore("chess", () => {
         const move = game.value.move({
             from: selectedSquare.value,
             to: target,
-            promotion: "q",
+            promotion: 'q',
         });
         if (!move) {
             selectedSquare.value = null;
             legalTargets.value = [];
             return;
         }
-        registerMove(move, "player");
+        registerMove(move, 'player');
         selectedSquare.value = null;
         legalTargets.value = [];
         syncBoard();
 
         if (game.value.isGameOver()) {
-            gamePhase.value = "over";
+            gamePhase.value = 'over';
             _stopClock();
             return;
         }
@@ -433,13 +433,13 @@ export const useChessStore = defineStore("chess", () => {
         const move = chooseBotMove();
         if (move) {
             const played = game.value.move(move);
-            registerMove(played, "bot");
+            registerMove(played, 'bot');
             syncBoard();
         }
         botThinking.value = false;
         botTimer = null;
         if (game.value.isGameOver()) {
-            gamePhase.value = "over";
+            gamePhase.value = 'over';
             _stopClock();
         }
     };
@@ -467,8 +467,8 @@ export const useChessStore = defineStore("chess", () => {
 
         // Recapture instinct: respond quickly after the player takes a piece
         const justCaptured =
-            lastPlayedMove.value?.flags?.includes("c") ||
-            lastPlayedMove.value?.flags?.includes("e");
+            lastPlayedMove.value?.flags?.includes('c') ||
+            lastPlayedMove.value?.flags?.includes('e');
         const recaptureRatio =
             justCaptured && Math.random() < 0.65 ? 0.35 : 1.0;
 
@@ -479,7 +479,7 @@ export const useChessStore = defineStore("chess", () => {
         const variance = Math.random() * 450;
 
         // Clock pressure: hurry when low on time
-        const botColor = playerColor.value === "w" ? "b" : "w";
+        const botColor = playerColor.value === 'w' ? 'b' : 'w';
         const clockRatio =
             timeControl.value && clocks.value[botColor] < 30 ? 0.4 : 1.0;
 
@@ -498,7 +498,7 @@ export const useChessStore = defineStore("chess", () => {
             elo.value,
         );
         // bot = side opposite the player
-        const botIsBlack = playerColor.value === "w";
+        const botIsBlack = playerColor.value === 'w';
 
         // Score each candidate move
         const scored = moves.map((move) => {
@@ -523,7 +523,7 @@ export const useChessStore = defineStore("chess", () => {
             const sign = botIsBlack ? -1 : 1;
             const captureBonus = move.captured ? simplicity * 45 * sign : 0;
             const checkBonus =
-                move.san.includes("+") || move.san.includes("#")
+                move.san.includes('+') || move.san.includes('#')
                     ? simplicity * 22 * sign
                     : 0;
 
@@ -587,7 +587,7 @@ export const useChessStore = defineStore("chess", () => {
 
     const evaluatePosition = () => {
         if (game.value.isCheckmate())
-            return game.value.turn() === "w" ? -100000 : 100000;
+            return game.value.turn() === 'w' ? -100000 : 100000;
         if (game.value.isDraw()) return 0;
         let score = 0;
         for (const tile of game.value.board().flat()) {
@@ -599,11 +599,11 @@ export const useChessStore = defineStore("chess", () => {
                   : 0;
             score +=
                 (pieceValues[tile.type] + bonus) *
-                (tile.color === "w" ? 1 : -1);
+                (tile.color === 'w' ? 1 : -1);
         }
         score +=
             game.value.moves({ verbose: true }).length *
-            (game.value.turn() === "w" ? 1.5 : -1.5);
+            (game.value.turn() === 'w' ? 1.5 : -1.5);
         return score;
     };
 
@@ -631,7 +631,7 @@ export const useChessStore = defineStore("chess", () => {
         capturedWhite.value = [];
         capturedBlack.value = [];
         lastMove.value = null;
-        moveFeedback.value = "Ready";
+        moveFeedback.value = 'Ready';
         botThinking.value = false;
         lastPlayedMove.value = null;
         fullHistory.value = [];
@@ -642,7 +642,7 @@ export const useChessStore = defineStore("chess", () => {
     /** Go back to lobby — config becomes editable again. */
     const newGame = () => {
         _resetBoard();
-        gamePhase.value = "lobby";
+        gamePhase.value = 'lobby';
     };
 
     /**
@@ -650,7 +650,7 @@ export const useChessStore = defineStore("chess", () => {
      * and triggers bot opening move if player chose black.
      */
     const startGame = () => {
-        if (gamePhase.value !== "lobby") return;
+        if (gamePhase.value !== 'lobby') return;
         // Reset board in case a previous game finished without newGame()
         _resetBoard();
         // Init clocks
@@ -660,24 +660,24 @@ export const useChessStore = defineStore("chess", () => {
                 b: timeControl.value.base,
             };
         }
-        gamePhase.value = "playing";
-        moveFeedback.value = "Game started";
+        gamePhase.value = 'playing';
+        moveFeedback.value = 'Game started';
         _startClock();
-        if (playerColor.value === "b") _triggerBotFirst();
+        if (playerColor.value === 'b') _triggerBotFirst();
     };
 
     /** Resign ends the current game, puts into 'over' state. */
     const resign = () => {
-        if (gamePhase.value !== "playing") return;
+        if (gamePhase.value !== 'playing') return;
         _stopClock();
-        gamePhase.value = "over";
-        moveFeedback.value = "Resigned";
+        gamePhase.value = 'over';
+        moveFeedback.value = 'Resigned';
     };
 
     /** Switch color — only in lobby. */
     const switchColor = () => {
-        if (gamePhase.value !== "lobby") return;
-        playerColor.value = playerColor.value === "w" ? "b" : "w";
+        if (gamePhase.value !== 'lobby') return;
+        playerColor.value = playerColor.value === 'w' ? 'b' : 'w';
     };
 
     /* ================================================================== */

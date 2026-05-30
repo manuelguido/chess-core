@@ -1,13 +1,13 @@
 <script setup>
-import { Swords } from "lucide-vue-next";
-import ChessPiece from "../ChessPiece.vue";
-import { useChessStore } from "../../stores/useChessStore.js";
+import { Swords } from 'lucide-vue-next';
+import ChessPiece from '../ChessPiece.vue';
+import { useChessStore } from '../../stores/useChessStore.js';
 
 const chess = useChessStore();
 </script>
 
 <template>
-    <section class="panel p-5 fade-in">
+    <section class="panel fade-in p-5">
         <div class="mb-4 flex items-center justify-between">
             <h2>Captured</h2>
             <Swords class="h-4 w-4 text-ink-faint" :stroke-width="1.5" />

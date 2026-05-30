@@ -17,7 +17,7 @@ function getCtx() {
         _ctx = new (window.AudioContext || window.webkitAudioContext)();
     }
     // Browsers suspend AudioContext until a user gesture; resume lazily.
-    if (_ctx.state === "suspended") _ctx.resume();
+    if (_ctx.state === 'suspended') _ctx.resume();
     return _ctx;
 }
 
@@ -43,13 +43,13 @@ function woodThud(vol, dur, freq = 700) {
 
     // Bandpass gives a "resonant wood" character
     const bp = ctx.createBiquadFilter();
-    bp.type = "bandpass";
+    bp.type = 'bandpass';
     bp.frequency.value = freq;
     bp.Q.value = 1.2;
 
     // Low-pass rolls off harsh highs
     const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
+    lp.type = 'lowpass';
     lp.frequency.value = freq * 1.8;
 
     // Fast exponential decay envelope
@@ -80,7 +80,7 @@ function tone(freq, vol, delay, dur) {
     const t = now + delay;
 
     const osc = ctx.createOscillator();
-    osc.type = "sine";
+    osc.type = 'sine';
     osc.frequency.value = freq;
 
     const gain = ctx.createGain();
@@ -130,11 +130,11 @@ export function useChessSound() {
      * @param {boolean} gameOver  true if game.isGameOver() after this move
      */
     const playForMove = (move, gameOver = false) => {
-        if (gameOver || move.san.includes("#")) {
+        if (gameOver || move.san.includes('#')) {
             playGameEnd();
             return;
         }
-        if (move.san.includes("+")) {
+        if (move.san.includes('+')) {
             playCheck();
             return;
         }

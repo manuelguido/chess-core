@@ -22,62 +22,69 @@
     /* Plus Jakarta Sans — distinctive humanist geometry, premium feel.
        Used for ALL UI: headings, controls, labels, body. JetBrains Mono is
        reserved for `.num` (tabular figures) only. */
-    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-        ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
-    --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, SFMono-Regular, Menlo,
+    --font-sans:
+        'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji';
+    --font-mono:
+        'JetBrains Mono', 'SF Mono', ui-monospace, SFMono-Regular, Menlo,
         Monaco, Consolas, monospace;
 
     /* Surfaces — warm-neutral (slight 35-45 hue) -------------------------- */
-    --color-bg-base:     #131210;   /* page background — warmer than pure black  */
-    --color-bg-surface:  #1c1b18;   /* card / panel surface                      */
-    --color-bg-elevated: #25241f;   /* hover, popovers, inset cells              */
-    --color-bg-sunken:   #0e0d0b;   /* deepest — captured row, FEN block         */
+    --color-bg-base: #131210; /* page background — warmer than pure black  */
+    --color-bg-surface: #1c1b18; /* card / panel surface                      */
+    --color-bg-elevated: #25241f; /* hover, popovers, inset cells              */
+    --color-bg-sunken: #0e0d0b; /* deepest — captured row, FEN block         */
 
-    --color-line-soft:   rgba(247, 240, 224, 0.06);
-    --color-line:        rgba(247, 240, 224, 0.10);
+    --color-line-soft: rgba(247, 240, 224, 0.06);
+    --color-line: rgba(247, 240, 224, 0.1);
     --color-line-strong: rgba(247, 240, 224, 0.16);
 
     /* Text ---------------------------------------------------------------- */
-    --color-ink:         #f1ecdf;   /* primary — warm off-white                  */
-    --color-ink-muted:   #a39d8b;   /* secondary — labels, metadata              */
-    --color-ink-faint:   #6a6558;   /* tertiary — coords, FEN                    */
+    --color-ink: #f1ecdf; /* primary — warm off-white                  */
+    --color-ink-muted: #a39d8b; /* secondary — labels, metadata              */
+    --color-ink-faint: #6a6558; /* tertiary — coords, FEN                    */
 
     /* Accent — single warm gold (Staunton wood) --------------------------- */
-    --color-accent:      #c9a96e;
+    --color-accent: #c9a96e;
     --color-accent-soft: rgba(201, 169, 110, 0.14);
     --color-accent-edge: rgba(201, 169, 110, 0.42);
 
     /* State semantics (used VERY sparingly) ------------------------------- */
-    --color-positive:    #84a07c;   /* up-material indicator                     */
-    --color-negative:    #c0746a;   /* down-material indicator                   */
-    --color-warning:     #d8a25a;   /* check                                     */
+    --color-positive: #84a07c; /* up-material indicator                     */
+    --color-negative: #c0746a; /* down-material indicator                   */
+    --color-warning: #d8a25a; /* check                                     */
 
     /* Board — classic walnut & cream (sober, low saturation) -------------- */
     --color-square-light: #ece2c8;
-    --color-square-dark:  #8a7556;
-    --color-square-light-active: #ddc78a;   /* last-move tint on light square    */
-    --color-square-dark-active:  #a6904f;   /* last-move tint on dark square     */
-    --color-coord-light:  rgba(40, 30, 14, 0.40);   /* coords sitting on light  */
-    --color-coord-dark:   rgba(243, 233, 207, 0.45); /* coords sitting on dark  */
+    --color-square-dark: #8a7556;
+    --color-square-light-active: #ddc78a; /* last-move tint on light square    */
+    --color-square-dark-active: #a6904f; /* last-move tint on dark square     */
+    --color-coord-light: rgba(40, 30, 14, 0.4); /* coords sitting on light  */
+    --color-coord-dark: rgba(243, 233, 207, 0.45); /* coords sitting on dark  */
 
     /* Motion -------------------------------------------------------------- */
     --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
     --ease-emphasis: cubic-bezier(0.32, 0.72, 0, 1);
 
     /* Shadow elevation (very restrained) ---------------------------------- */
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.40);
-    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.40);
-    --shadow-board: 0 24px 60px -20px rgba(0, 0, 0, 0.75),
-                    0 8px 24px -8px rgba(0, 0, 0, 0.50);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-board:
+        0 24px 60px -20px rgba(0, 0, 0, 0.75),
+        0 8px 24px -8px rgba(0, 0, 0, 0.5);
 }
 
 /* =========================================================================
    Base layer
    ========================================================================= */
 @layer base {
-    :root { color-scheme: dark; }
+    :root {
+        color-scheme: dark;
+    }
 
-    html, body {
+    html,
+    body {
         background: var(--color-bg-base);
         color: var(--color-ink);
         font-family: var(--font-sans);
@@ -92,13 +99,34 @@
     }
 
     /* Typographic scale — strict & predictable ----------------------------- */
-    h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.022em; line-height: 1.2;  }
-    h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.3;  }
-    h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em;  line-height: 1.35; }
+    h1 {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.022em;
+        line-height: 1.2;
+    }
+    h2 {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+        line-height: 1.3;
+    }
+    h3 {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        line-height: 1.35;
+    }
 
-    button, input { font: inherit; color: inherit; }
+    button,
+    input {
+        font: inherit;
+        color: inherit;
+    }
 
-    *:focus { outline: none; }
+    *:focus {
+        outline: none;
+    }
     *:focus-visible {
         outline: 2px solid var(--color-accent);
         outline-offset: 2px;
@@ -111,20 +139,26 @@
     }
 
     /* Scrollbars — minimal --------------------------------------------------- */
-    ::-webkit-scrollbar       { width: 10px; height: 10px; }
-    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
     ::-webkit-scrollbar-thumb {
         background: var(--color-line);
         border-radius: 8px;
     }
-    ::-webkit-scrollbar-thumb:hover { background: var(--color-line-strong); }
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--color-line-strong);
+    }
 }
 
 /* =========================================================================
    Components — opinionated primitives, all token-driven
    ========================================================================= */
 @layer components {
-
     /* ----- Surfaces ------------------------------------------------------- */
     .panel {
         background: var(--color-bg-surface);
@@ -190,21 +224,28 @@
         cursor: pointer;
         transition:
             background-color 150ms var(--ease-standard),
-            border-color     150ms var(--ease-standard),
-            color            150ms var(--ease-standard),
-            transform        80ms  var(--ease-standard);
+            border-color 150ms var(--ease-standard),
+            color 150ms var(--ease-standard),
+            transform 80ms var(--ease-standard);
         user-select: none;
     }
 
-    .btn:active:not(:disabled) { transform: translateY(1px); }
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn:active:not(:disabled) {
+        transform: translateY(1px);
+    }
+    .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
 
     .btn--primary {
         background: var(--color-accent);
         color: #1a1505;
         font-weight: 600;
     }
-    .btn--primary:hover:not(:disabled) { background: #d6b87b; }
+    .btn--primary:hover:not(:disabled) {
+        background: #d6b87b;
+    }
 
     .btn--ghost {
         background: transparent;
@@ -248,8 +289,8 @@
         cursor: pointer;
         transition:
             background-color 150ms var(--ease-standard),
-            border-color     150ms var(--ease-standard),
-            color            150ms var(--ease-standard);
+            border-color 150ms var(--ease-standard),
+            color 150ms var(--ease-standard);
     }
     .row-btn:hover:not([data-active='true']) {
         background: var(--color-bg-elevated);
@@ -298,7 +339,9 @@
         border: 2px solid var(--color-bg-base);
         box-shadow: 0 0 0 1px var(--color-accent-edge);
     }
-    .slider:hover::-webkit-slider-thumb { transform: scale(1.10); }
+    .slider:hover::-webkit-slider-thumb {
+        transform: scale(1.1);
+    }
     .slider:focus-visible::-webkit-slider-thumb {
         outline: 2px solid var(--color-accent);
         outline-offset: 2px;
@@ -359,14 +402,24 @@
         cursor: pointer;
         transition: filter 100ms var(--ease-standard);
     }
-    .square:hover { filter: brightness(1.04); }
+    .square:hover {
+        filter: brightness(1.04);
+    }
 
-    .square--light { background: var(--color-square-light); }
-    .square--dark  { background: var(--color-square-dark);  }
+    .square--light {
+        background: var(--color-square-light);
+    }
+    .square--dark {
+        background: var(--color-square-dark);
+    }
 
     /* Last-move highlight: tint, not overlay — keeps pieces crisp ----------- */
-    .square--last.square--light { background: var(--color-square-light-active); }
-    .square--last.square--dark  { background: var(--color-square-dark-active);  }
+    .square--last.square--light {
+        background: var(--color-square-light-active);
+    }
+    .square--last.square--dark {
+        background: var(--color-square-dark-active);
+    }
 
     /* Selected piece: gold inner ring, no outline jump --------------------- */
     .square--selected::before {
@@ -401,10 +454,12 @@
 
     /* King-in-check halo --------------------------------------------------- */
     .square--check {
-        background: radial-gradient(circle at center,
+        background: radial-gradient(
+            circle at center,
             rgba(192, 116, 106, 0.85) 0%,
-            rgba(192, 116, 106, 0.40) 45%,
-            transparent 75%);
+            rgba(192, 116, 106, 0.4) 45%,
+            transparent 75%
+        );
     }
 
     /* Coords --------------------------------------------------------------- */
@@ -417,10 +472,20 @@
         letter-spacing: 0;
         pointer-events: none;
     }
-    .coord--rank { top: 3px;    left: 4px;  }
-    .coord--file { bottom: 3px; right: 5px; }
-    .square--light .coord { color: var(--color-coord-light); }
-    .square--dark  .coord { color: var(--color-coord-dark);  }
+    .coord--rank {
+        top: 3px;
+        left: 4px;
+    }
+    .coord--file {
+        bottom: 3px;
+        right: 5px;
+    }
+    .square--light .coord {
+        color: var(--color-coord-light);
+    }
+    .square--dark .coord {
+        color: var(--color-coord-dark);
+    }
 
     /* Piece sizing inside square ------------------------------------------- */
     .piece {
@@ -448,19 +513,33 @@
    Animations — restrained
    ========================================================================= */
 @keyframes ck-fade-in {
-    from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @keyframes piece-slide {
-    from { transform: translate(var(--mv-x, 0px), var(--mv-y, 0px)); }
-    to   { transform: translate(0, 0); }
+    from {
+        transform: translate(var(--mv-x, 0px), var(--mv-y, 0px));
+    }
+    to {
+        transform: translate(0, 0);
+    }
 }
 
-.fade-in { animation: ck-fade-in 240ms var(--ease-emphasis) both; }
+.fade-in {
+    animation: ck-fade-in 240ms var(--ease-emphasis) both;
+}
 
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
         animation-duration: 0.001ms !important;
         transition-duration: 0.001ms !important;
     }

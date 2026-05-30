@@ -1,25 +1,34 @@
 <script setup>
-import { ref } from "vue";
-import { Timer } from "lucide-vue-next";
-import { useChessStore } from "../../stores/useChessStore.js";
+import { ref } from 'vue';
+import { Timer } from 'lucide-vue-next';
+import { useChessStore } from '../../stores/useChessStore.js';
 
 const chess = useChessStore();
 
 const PRESETS = [
-    { label: "Bullet",   options: [
-        { name: "1+0",  base: 60,  increment: 0 },
-        { name: "2+0",  base: 120, increment: 0 },
-        { name: "2+1",  base: 120, increment: 1 },
-    ]},
-    { label: "Blitz",    options: [
-        { name: "3+0",  base: 180, increment: 0 },
-        { name: "3+2",  base: 180, increment: 2 },
-        { name: "5+0",  base: 300, increment: 0 },
-    ]},
-    { label: "Classical", options: [
-        { name: "10+0", base: 600,  increment: 0 },
-        { name: "15+0", base: 900,  increment: 0 },
-    ]},
+    {
+        label: 'Bullet',
+        options: [
+            { name: '1+0', base: 60, increment: 0 },
+            { name: '2+0', base: 120, increment: 0 },
+            { name: '2+1', base: 120, increment: 1 },
+        ],
+    },
+    {
+        label: 'Blitz',
+        options: [
+            { name: '3+0', base: 180, increment: 0 },
+            { name: '3+2', base: 180, increment: 2 },
+            { name: '5+0', base: 300, increment: 0 },
+        ],
+    },
+    {
+        label: 'Classical',
+        options: [
+            { name: '10+0', base: 600, increment: 0 },
+            { name: '15+0', base: 900, increment: 0 },
+        ],
+    },
 ];
 
 // Custom modal state
@@ -59,14 +68,17 @@ const applyCustom = () => {
 };
 
 const formatPreview = (tc) => {
-    if (!tc) return "∞ Untimed";
+    if (!tc) return '∞ Untimed';
     const m = Math.floor(tc.base / 60);
     return tc.increment ? `${m}+${tc.increment}` : `${m}+0`;
 };
 </script>
 
 <template>
-    <section class="panel p-5 fade-in" :class="chess.configLocked && 'opacity-60'">
+    <section
+        class="panel fade-in p-5"
+        :class="chess.configLocked && 'opacity-60'"
+    >
         <div class="mb-4 flex items-center justify-between">
             <h2>Time control</h2>
             <Timer class="h-4 w-4 text-ink-faint" :stroke-width="1.5" />
@@ -74,7 +86,9 @@ const formatPreview = (tc) => {
 
         <p class="label mb-3">
             Selected:
-            <span class="ml-1 font-medium text-ink num">{{ formatPreview(chess.timeControl) }}</span>
+            <span class="num ml-1 font-medium text-ink">{{
+                formatPreview(chess.timeControl)
+            }}</span>
         </p>
 
         <div class="space-y-3">
@@ -85,7 +99,7 @@ const formatPreview = (tc) => {
                         v-for="preset in group.options"
                         :key="preset.name"
                         type="button"
-                        class="row-btn justify-center num text-xs"
+                        class="row-btn num justify-center text-xs"
                         :data-active="isActive(preset)"
                         :disabled="chess.configLocked"
                         @click="select(preset)"
@@ -96,7 +110,7 @@ const formatPreview = (tc) => {
             </div>
         </div>
 
-        <div class="mt-3 panel-divider pt-3 grid grid-cols-2 gap-1.5">
+        <div class="panel-divider mt-3 grid grid-cols-2 gap-1.5 pt-3">
             <button
                 type="button"
                 class="row-btn justify-center text-xs"
@@ -129,7 +143,7 @@ const formatPreview = (tc) => {
 
                 <div class="space-y-4">
                     <div>
-                        <label class="label block mb-1.5" for="custom-minutes">
+                        <label class="label mb-1.5 block" for="custom-minutes">
                             Base time (minutes)
                         </label>
                         <input
@@ -138,11 +152,14 @@ const formatPreview = (tc) => {
                             type="number"
                             min="1"
                             max="60"
-                            class="w-full rounded-md border border-line-soft bg-bg-elevated px-3 py-2 num text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                            class="num w-full rounded-md border border-line-soft bg-bg-elevated px-3 py-2 text-sm text-ink focus:ring-1 focus:ring-accent focus:outline-none"
                         />
                     </div>
                     <div>
-                        <label class="label block mb-1.5" for="custom-increment">
+                        <label
+                            class="label mb-1.5 block"
+                            for="custom-increment"
+                        >
                             Increment (seconds)
                         </label>
                         <input
@@ -151,7 +168,7 @@ const formatPreview = (tc) => {
                             type="number"
                             min="0"
                             max="60"
-                            class="w-full rounded-md border border-line-soft bg-bg-elevated px-3 py-2 num text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                            class="num w-full rounded-md border border-line-soft bg-bg-elevated px-3 py-2 text-sm text-ink focus:ring-1 focus:ring-accent focus:outline-none"
                         />
                     </div>
                 </div>

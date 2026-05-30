@@ -1,5 +1,5 @@
 <script setup>
-import { useChessStore } from "../../stores/useChessStore.js";
+import { useChessStore } from '../../stores/useChessStore.js';
 
 const chess = useChessStore();
 </script>
@@ -18,7 +18,7 @@ const chess = useChessStore();
         <div class="bg-bg-surface px-4 py-3">
             <p class="label">Material</p>
             <p
-                class="mt-1.5 num text-sm font-medium"
+                class="num mt-1.5 text-sm font-medium"
                 :class="
                     chess.materialBalance > 0
                         ? 'text-positive'
@@ -27,12 +27,13 @@ const chess = useChessStore();
                           : 'text-ink'
                 "
             >
-                {{ chess.materialBalance > 0 ? "+" : "" }}{{ chess.materialBalance }}
+                {{ chess.materialBalance > 0 ? '+' : ''
+                }}{{ chess.materialBalance }}
             </p>
         </div>
         <div class="bg-bg-surface px-4 py-3">
             <p class="label">Move</p>
-            <p class="mt-1.5 num text-sm font-medium text-ink">
+            <p class="num mt-1.5 text-sm font-medium text-ink">
                 {{ chess.currentMoveNumber }}
             </p>
         </div>

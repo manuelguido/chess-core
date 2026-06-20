@@ -40,43 +40,62 @@ const isLow = (secs) => secs != null && secs <= 30;
 </script>
 
 <template>
-    <div v-if="chess.timeControl" class="flex w-full max-w-180 flex-col gap-1">
-        <!-- Opponent clock (top) -->
+    <div
+        v-if="chess.timeControl && chess.gamePhase !== 'lobby'"
+        class="board-size flex flex-col gap-2"
+    >
         <div
-            class="flex items-center justify-between rounded-lg border px-4 py-2 transition-colors duration-300"
+            class="flex items-center justify-between rounded-full border px-4 py-2 transition-colors duration-300"
             :class="[
                 isTopTurn
-                    ? 'border-accent bg-bg-elevated'
+                    ? 'border-navy-950 bg-navy-950 text-white'
                     : 'border-line-soft bg-bg-surface',
                 isLow(topSecs) && isTopTurn && 'border-negative',
             ]"
         >
-            <span class="label text-xs">{{ topLabel }}</span>
+            <span
+                class="text-xs font-bold uppercase"
+                :class="isTopTurn ? 'text-white/70' : 'text-ink-muted'"
+            >
+                {{ topLabel }}
+            </span>
             <span
                 class="num text-lg font-semibold tabular-nums"
                 :class="
-                    isLow(topSecs) && isTopTurn ? 'text-negative' : 'text-ink'
+                    isLow(topSecs) && isTopTurn
+                        ? 'text-negative'
+                        : isTopTurn
+                          ? 'text-white'
+                          : 'text-navy-950'
                 "
             >
                 {{ format(topSecs) }}
             </span>
         </div>
 
-        <!-- Player clock (bottom) -->
         <div
-            class="flex items-center justify-between rounded-lg border px-4 py-2 transition-colors duration-300"
+            class="flex items-center justify-between rounded-full border px-4 py-2 transition-colors duration-300"
             :class="[
                 isBotTurn
-                    ? 'border-accent bg-bg-elevated'
+                    ? 'border-navy-950 bg-navy-950 text-white'
                     : 'border-line-soft bg-bg-surface',
                 isLow(botSecs) && isBotTurn && 'border-negative',
             ]"
         >
-            <span class="label text-xs">{{ botLabel }} (You)</span>
+            <span
+                class="text-xs font-bold uppercase"
+                :class="isBotTurn ? 'text-white/70' : 'text-ink-muted'"
+            >
+                {{ botLabel }} (You)
+            </span>
             <span
                 class="num text-lg font-semibold tabular-nums"
                 :class="
-                    isLow(botSecs) && isBotTurn ? 'text-negative' : 'text-ink'
+                    isLow(botSecs) && isBotTurn
+                        ? 'text-negative'
+                        : isBotTurn
+                          ? 'text-white'
+                          : 'text-navy-950'
                 "
             >
                 {{ format(botSecs) }}

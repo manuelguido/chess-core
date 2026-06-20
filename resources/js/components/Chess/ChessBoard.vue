@@ -120,7 +120,7 @@ const tileClasses = (tile) => {
 </script>
 
 <template>
-    <div class="board-frame w-full max-w-180">
+    <div class="board-frame board-size">
         <div ref="boardEl" class="board" role="grid" aria-label="Chess board">
             <button
                 v-for="tile in displayTiles"

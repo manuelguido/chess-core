@@ -8,7 +8,7 @@ const chess = useChessStore();
     <section class="panel fade-in p-5">
         <h2>Position</h2>
         <p
-            class="panel-inner num mt-3 p-3 text-[11px] leading-relaxed break-all text-ink-muted"
+            class="panel-inner notation mt-3 p-3 text-[11px] leading-relaxed break-all text-ink-muted"
         >
             {{ chess.viewFen }}
         </p>

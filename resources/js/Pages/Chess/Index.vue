@@ -36,17 +36,17 @@ onBeforeUnmount(() => {
 
     <main class="min-h-screen bg-bg-base text-ink">
         <div
-            class="mx-auto flex min-h-screen max-w-[1440px] flex-col px-4 py-5 sm:px-6 lg:px-8 xl:px-10"
+            class="mx-auto flex min-h-screen max-w-360 flex-col px-4 py-5 sm:px-6 lg:px-8 xl:px-10"
         >
             <header
                 class="mb-5 flex flex-wrap items-center justify-between gap-4"
             >
                 <div class="flex items-center gap-3">
-                    <span
-                        class="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy-950 text-white shadow-1"
-                    >
-                        <Crown class="h-5 w-5" :stroke-width="1.75" />
-                    </span>
+                    <img
+                        src="../../../img/icon-1024.png"
+                        alt="Chess Core logo"
+                        class="h-12 w-12"
+                    />
                     <div class="flex flex-col gap-1 leading-tight">
                         <h1>Chess Core</h1>
                         <p class="meta hidden sm:block">

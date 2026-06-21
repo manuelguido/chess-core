@@ -265,7 +265,7 @@ const materialLabel = computed(() => {
                 />
             </div>
             <p
-                class="num rounded-3xl border border-line-soft bg-bg-sunken p-4 text-[11px] leading-relaxed break-all text-ink-muted"
+                class="notation rounded-3xl border border-line-soft bg-bg-sunken p-4 text-[11px] leading-relaxed break-all text-ink-muted"
             >
                 {{ chess.viewFen }}
             </p>

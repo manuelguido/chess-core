@@ -15,7 +15,7 @@ jobs:
     environment: production
 
     env:
-      PHP_VERSION: '8.3'
+      PHP_VERSION: '8.4.1'
       NODE_VERSION: '22.13.1'
 
     steps:

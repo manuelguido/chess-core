@@ -1,0 +1,115 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      PHP_VERSION: '8.3'
+      NODE_VERSION: '22.13.1'
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+          tools: composer
+
+      - name: Check PHP version
+        run: php -v
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install NPM dependencies
+        run: npm ci
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Prepare server
+        uses: appleboy/ssh-action@v1.2.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+
+            cd ${{ secrets.SSH_DEPLOY_PATH }}
+
+            php -v
+
+            mkdir -p ~/.ssh
+            ssh-keygen -R github.com || true
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+            git fetch --force origin main --tags
+            git reset --hard ${{ github.sha }}
+
+            git clean -fd \
+              -e .env \
+              -e storage/ \
+              -e public/build/ \
+              -e index.php \
+              -e .htaccess \
+              -e public/.htaccess
+
+            mkdir -p public/build
+
+      - name: Upload built assets via SCP
+        uses: appleboy/scp-action@v0.1.6
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_KEY }}
+          source: public/build
+          target: ${{ secrets.SSH_DEPLOY_PATH }}
+          overwrite: true
+
+      - name: Finalize deployment
+        uses: appleboy/ssh-action@v1.2.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+
+            cd ${{ secrets.SSH_DEPLOY_PATH }}
+
+            composer2 install \
+              --no-dev \
+              --no-interaction \
+              --prefer-dist \
+              --optimize-autoloader
+
+            php artisan migrate --force
+
+            php artisan optimize:clear
+            php artisan optimize
+
+            chmod -R 775 storage bootstrap/cache

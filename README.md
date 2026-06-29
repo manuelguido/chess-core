@@ -1,58 +1,180 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Chess Core
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Chess Core is a single-player chess application focused on the feel of playing, reviewing, and managing a complete game in the browser. It includes a responsive board, legal move handling, clocks, captured material, move history, position review, and a configurable computer opponent.
 
-## About Laravel
+The project is intentionally scoped to local play against a bot. It is not a multiplayer platform; it is a study in making a chess surface feel complete when the server mainly delivers the application shell.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Gameplay
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- Play a legal chess game against a configurable bot.
+- Choose player color before the game starts.
+- Pick from preset time controls or define a custom base time and increment.
+- Play untimed games.
+- See legal target squares, the last move, check state, captured material, material balance, and status text.
+- Review previous positions through the move history without disturbing the live game.
+- Start a new game or resign the current game.
+- Use a responsive board layout with a side panel on desktop and a settings drawer on smaller screens.
+- Hear synthesized move, capture, check, and game-end sounds generated through the Web Audio API.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Game Model And Opponent
 
-## Learning Laravel
+The rules of chess are handled by [`chess.js`](https://www.npmjs.com/package/chess.js). The main Pinia store keeps a single `Chess` instance for the live game and exposes the derived state needed by the UI:
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- current board matrix
+- legal targets for the selected piece
+- move history and SAN notation
+- FEN for the current and reviewed positions
+- captured pieces
+- clock state
+- current phase: lobby, playing, or over
+- bot-thinking state
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+The computer opponent is implemented in `resources/js/stores/useChessStore.js`. It is a client-side heuristic minimax bot with alpha-beta pruning, material and center-control evaluation, and a temperature-based move picker. The strength slider maps to search depth, move randomness, simplicity bias, and occasional shallow searches so lower-strength play is less deterministic.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+The ELO labels are UI tuning profiles, not measured ratings.
 
-## Agentic Development
+The `stockfish` package is present in `package.json`, but the current store does not wire Stockfish into move selection. The active opponent is the custom minimax implementation described above.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Project Shape
 
-```bash
-composer require laravel/boost --dev
+```text
+app/Http/Controllers/ChessController.php
+    Serves the Inertia page and bot profile metadata.
 
-php artisan boost:install
+resources/js/Pages/Chess/Index.vue
+    Top-level chess screen.
+
+resources/js/stores/useChessStore.js
+    Game state, move handling, clocks, history navigation, and bot logic.
+
+resources/js/components/Chess/
+    Board, controls, sidebars, settings, clock, captured pieces, and panels.
+
+resources/js/composables/useChessSound.js
+    Procedural Web Audio sounds for moves and game events.
+
+tests/
+    Framework smoke tests; chess-specific coverage is not in place yet.
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Stack
+
+| Layer | Tools |
+| --- | --- |
+| Backend | Laravel 13, PHP 8.3+, Inertia Laravel |
+| Frontend | Vue 3, Pinia, Vite, Tailwind CSS 4 |
+| Chess | `chess.js`, custom minimax bot |
+| UI | lucide-vue-next |
+| Quality | PHPUnit, Laravel Pint, ESLint, Prettier |
+
+## Local Setup
+
+Install PHP and JavaScript dependencies:
+
+```bash
+composer install
+npm ci
+```
+
+Create the environment file and application key:
+
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+Configure the database connection in `.env`, then run migrations:
+
+```bash
+php artisan migrate
+```
+
+Start the local development stack:
+
+```bash
+composer dev
+```
+
+That Composer script runs Laravel, the queue listener, Laravel Pail, and Vite together through `concurrently`.
+
+If you prefer separate processes:
+
+```bash
+php artisan serve
+npm run dev
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+## Tests And Checks
+
+Run the Laravel test suite:
+
+```bash
+composer test
+```
+
+Run PHP style formatting:
+
+```bash
+composer lint
+```
+
+Run frontend checks and formatting:
+
+```bash
+npm run lint:check
+npm run format:check
+```
+
+Apply frontend fixes:
+
+```bash
+npm run lint:fix
+npm run format
+```
+
+## Implementation Notes
+
+The game configuration is intentionally locked once a game starts. Bot strength, player color, and time control can be changed in the lobby, but not mid-game.
+
+Move review is separate from the live board. The store replays SAN history into a temporary `Chess` instance to render reviewed positions, while the active game continues to own the true move state.
+
+The board component owns pixel-level move animation because animation depends on measured square size. The store only emits the last played move.
+
+Clock state is handled in the store with one interval. In timed games, the side to move loses when their clock reaches zero. Increment is applied after each committed move.
+
+## Known Boundaries
+
+- There is no multiplayer mode.
+- Games are not persisted to the database.
+- The current bot is not a UCI engine integration.
+- Promotion always promotes to a queen.
+- Chess-specific tests for clock behavior, move review, and game lifecycle would be the next useful addition.
 
 ## Contributing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Keep changes focused on the chess experience. Good contributions usually fall into one of these areas:
 
-## Code of Conduct
+- board interaction and accessibility
+- move generation or review behavior
+- bot evaluation and strength tuning
+- tests around clock behavior, game lifecycle, and history navigation
+- polishing responsive layout without changing the application contract
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Before opening a pull request, run:
 
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+composer test
+npm run lint:check
+npm run format:check
+npm run build
+```
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Chess Core is open-sourced under the MIT license. See `LICENSE` for details.

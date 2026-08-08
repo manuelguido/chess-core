@@ -59,6 +59,35 @@ const engineParams = (elo) => {
     return { depth: 5, temperature: 0, simplicity: 0.0, laziness: 0.0 };
 };
 
+/* ------------------------------------------------------------------ */
+/* Opening book — longest SAN prefix wins                              */
+/* ------------------------------------------------------------------ */
+const OPENINGS = [
+    ['e4 e5 Nf3 Nc6 Bb5 a6', 'C70', 'Ruy López · Morphy Defence'],
+    ['e4 e5 Nf3 Nc6 Bb5', 'C60', 'Ruy López'],
+    ['e4 e5 Nf3 Nc6 Bc4', 'C50', 'Italian Game'],
+    ['e4 e5 Nf3 Nc6', 'C44', "King's Knight Opening"],
+    ['e4 e5 Nf3', 'C40', "King's Knight Opening"],
+    ['e4 e5', 'C20', 'Open Game'],
+    ['e4 c5', 'B20', 'Sicilian Defence'],
+    ['e4 e6', 'C00', 'French Defence'],
+    ['e4 c6', 'B10', 'Caro-Kann Defence'],
+    ['e4 d5', 'B01', 'Scandinavian Defence'],
+    ['e4 Nf6', 'B02', 'Alekhine Defence'],
+    ['e4 d6', 'B07', 'Pirc Defence'],
+    ['e4', 'B00', "King's Pawn Opening"],
+    ['d4 d5 c4', 'D06', "Queen's Gambit"],
+    ['d4 Nf6 c4', 'E00', 'Indian Game'],
+    ['d4 d5', 'D00', "Queen's Pawn Game"],
+    ['d4 Nf6', 'A45', 'Indian Defence'],
+    ['d4 f5', 'A80', 'Dutch Defence'],
+    ['d4', 'A40', "Queen's Pawn Opening"],
+    ['c4', 'A10', 'English Opening'],
+    ['Nf3', 'A04', 'Réti Opening'],
+    ['g3', 'A00', "King's Fianchetto Opening"],
+    ['b3', 'A01', 'Nimzo-Larsen Attack'],
+];
+
 export const useChessStore = defineStore('chess', () => {
     const { playForMove } = useChessSound();
 
@@ -74,12 +103,40 @@ export const useChessStore = defineStore('chess', () => {
     const playerColor = ref('w');
 
     /**
+     * What the player *asked* for in the lobby: 'w' | 'b' | 'random'.
+     * `playerColor` is the resolved side and is what the rest of the
+     * store reasons about; 'random' is settled once, at startGame().
+     */
+    const colorPreference = ref('w');
+
+    /**
      * Time control: base in seconds, increment in seconds.
      * null = untimed.
      */
     const timeControl = ref({ base: 180, increment: 0 }); // 3+0
 
     const configLocked = computed(() => gamePhase.value !== 'lobby');
+
+    /* Assistance — display-only, safe to change mid-game. */
+    const showHints = ref(true);
+    const showCoords = ref(true);
+
+    /**
+     * Manual board-orientation override. `null` = follow the side you play,
+     * which is the behaviour you want in every case except "let me look at
+     * this from the other side for a moment".
+     */
+    const flipOverride = ref(null);
+
+    const boardFlipped = computed(() =>
+        flipOverride.value === null
+            ? playerColor.value === 'b'
+            : flipOverride.value,
+    );
+
+    const flipBoard = () => {
+        flipOverride.value = !boardFlipped.value;
+    };
 
     /* ================================================================== */
     /* SECTION B — Active game state                                       */
@@ -93,6 +150,13 @@ export const useChessStore = defineStore('chess', () => {
     const capturedBlack = ref([]);
     const lastMove = ref(null);
     const moveFeedback = ref('Ready');
+
+    /**
+     * Why the game ended, when the reason is not visible on the board —
+     * resignation or a flag fall. Checkmate and draws are read from the
+     * position itself, so they leave this null.
+     */
+    const resultReason = ref(null);
     const positionFen = ref(game.value.fen());
     const currentMoveNumber = ref(game.value.moveNumber());
 
@@ -139,8 +203,10 @@ export const useChessStore = defineStore('chess', () => {
     const _timeOut = (color) => {
         _stopClock();
         gamePhase.value = 'over';
-        moveFeedback.value =
+        const reason =
             color === playerColor.value ? 'Time — you lost' : 'Time — you win!';
+        moveFeedback.value = reason;
+        resultReason.value = reason;
     };
 
     /* ================================================================== */
@@ -227,9 +293,38 @@ export const useChessStore = defineStore('chess', () => {
         );
     });
 
+    /**
+     * Side to move on the live position. Reads through `positionFen` so it
+     * re-evaluates on every committed move — `game` is a shallowRef whose
+     * internals Vue cannot see.
+     */
+    const turn = computed(() => {
+        positionFen.value;
+        return game.value.turn();
+    });
+
+    const isPlayerTurn = computed(() => turn.value === playerColor.value);
+
+    const isCheckmate = computed(() => {
+        positionFen.value;
+        return game.value.isCheckmate();
+    });
+
+    const canTakeback = computed(
+        () =>
+            gamePhase.value === 'playing' &&
+            !botThinking.value &&
+            isPlayerTurn.value &&
+            fullHistory.value.length >= 2,
+    );
+
     const status = computed(() => {
         positionFen.value;
         if (gamePhase.value === 'lobby') return 'Not started';
+        // Resignation and flag falls leave a perfectly playable position
+        // behind, so they have to be reported before anything is read off
+        // the board.
+        if (resultReason.value) return resultReason.value;
         if (game.value.isCheckmate()) {
             return game.value.turn() === playerColor.value
                 ? 'Checkmate — you lost'
@@ -250,6 +345,7 @@ export const useChessStore = defineStore('chess', () => {
     const gameTurnLabel = computed(() => {
         positionFen.value;
         if (gamePhase.value === 'lobby') return 'Configure & start';
+        if (resultReason.value) return resultReason.value;
         if (game.value.isCheckmate()) {
             return game.value.turn() === playerColor.value
                 ? 'Bot wins by checkmate'
@@ -269,6 +365,41 @@ export const useChessStore = defineStore('chess', () => {
             0,
         );
         return Math.round(((blackLost - whiteLost) / 100) * 10) / 10;
+    });
+
+    /**
+     * Static evaluation of the position on screen, in pawns, from white's
+     * point of view. This is the same heuristic the engine searches with —
+     * material, centre occupation and mobility — not a deep search, so treat
+     * it as a read on the position rather than an oracle.
+     */
+    const positionEval = computed(() => {
+        const fen = viewFen.value;
+        if (!fen) return 0;
+        let probe;
+        try {
+            probe = new Chess(fen);
+        } catch {
+            return 0;
+        }
+        if (probe.isCheckmate()) return probe.turn() === 'w' ? -99 : 99;
+        if (probe.isDraw()) return 0;
+        return Math.round((evaluatePosition(probe) / 100) * 10) / 10;
+    });
+
+    /** Eval bar fill, 0-100, white's share of the bar. */
+    const evalPercent = computed(() => {
+        const clamped = Math.max(-8, Math.min(8, positionEval.value));
+        return Math.max(4, Math.min(96, 50 + clamped * 5.75));
+    });
+
+    /** Longest matching opening prefix, or a "custom position" fallback. */
+    const opening = computed(() => {
+        const line = moveHistory.value.join(' ');
+        const hit = OPENINGS.find((entry) => line.startsWith(entry[0]));
+        return hit
+            ? { eco: hit[1], name: hit[2] }
+            : { eco: '—', name: 'Custom position' };
     });
 
     const movePairs = computed(() => {
@@ -303,7 +434,14 @@ export const useChessStore = defineStore('chess', () => {
         );
     });
 
-    const legalTargetSet = computed(() => new Set(legalTargets.value));
+    /**
+     * Squares the board draws move markers on. Turning hints off hides the
+     * markers only — the move itself is still validated by chess.js, so
+     * playing without hints stays playable.
+     */
+    const legalTargetSet = computed(() =>
+        showHints.value ? new Set(legalTargets.value) : new Set(),
+    );
 
     const kingInCheckSquare = computed(() => {
         positionFen.value;
@@ -322,8 +460,6 @@ export const useChessStore = defineStore('chess', () => {
         return null;
     });
 
-    const canSwitchColor = computed(() => gamePhase.value === 'lobby');
-
     /* ================================================================== */
     /* SECTION F — Internal helpers                                        */
     /* ================================================================== */
@@ -331,6 +467,19 @@ export const useChessStore = defineStore('chess', () => {
         board.value = game.value.board();
         positionFen.value = game.value.fen();
         currentMoveNumber.value = game.value.moveNumber();
+    };
+
+    /** Rebuild both captured lists from the move log (used after a takeback). */
+    const _recomputeCaptured = () => {
+        const white = [];
+        const black = [];
+        for (const entry of fullHistory.value) {
+            if (!entry.captured) continue;
+            if (entry.color === 'w') black.push(entry.captured);
+            else white.push(entry.captured);
+        }
+        capturedWhite.value = white;
+        capturedBlack.value = black;
     };
 
     const classifyMove = (move, side) => {
@@ -362,6 +511,8 @@ export const useChessStore = defineStore('chess', () => {
             to: move.to,
             flags: move.flags,
             color: move.color,
+            // Recorded so a takeback can rebuild the captured lists exactly.
+            captured: move.captured ?? null,
             fen: game.value.fen(),
         });
         // Keep view cursor tracking live
@@ -585,12 +736,16 @@ export const useChessStore = defineStore('chess', () => {
         return best;
     };
 
-    const evaluatePosition = () => {
-        if (game.value.isCheckmate())
-            return game.value.turn() === 'w' ? -100000 : 100000;
-        if (game.value.isDraw()) return 0;
+    /**
+     * Static evaluation in centipawns, positive = better for white.
+     * Defaults to the live game so the search can call it with no argument.
+     */
+    const evaluatePosition = (position = game.value) => {
+        if (position.isCheckmate())
+            return position.turn() === 'w' ? -100000 : 100000;
+        if (position.isDraw()) return 0;
         let score = 0;
-        for (const tile of game.value.board().flat()) {
+        for (const tile of position.board().flat()) {
             if (!tile) continue;
             const bonus = centerSquares.has(tile.square)
                 ? 18
@@ -602,8 +757,8 @@ export const useChessStore = defineStore('chess', () => {
                 (tile.color === 'w' ? 1 : -1);
         }
         score +=
-            game.value.moves({ verbose: true }).length *
-            (game.value.turn() === 'w' ? 1.5 : -1.5);
+            position.moves({ verbose: true }).length *
+            (position.turn() === 'w' ? 1.5 : -1.5);
         return score;
     };
 
@@ -632,10 +787,12 @@ export const useChessStore = defineStore('chess', () => {
         capturedBlack.value = [];
         lastMove.value = null;
         moveFeedback.value = 'Ready';
+        resultReason.value = null;
         botThinking.value = false;
         lastPlayedMove.value = null;
         fullHistory.value = [];
         viewCursor.value = null;
+        flipOverride.value = null;
         syncBoard();
     };
 
@@ -653,6 +810,13 @@ export const useChessStore = defineStore('chess', () => {
         if (gamePhase.value !== 'lobby') return;
         // Reset board in case a previous game finished without newGame()
         _resetBoard();
+        // Settle 'random' now, so the rest of the game has a concrete side.
+        playerColor.value =
+            colorPreference.value === 'random'
+                ? Math.random() < 0.5
+                    ? 'w'
+                    : 'b'
+                : colorPreference.value;
         // Init clocks
         if (timeControl.value) {
             clocks.value = {
@@ -672,12 +836,48 @@ export const useChessStore = defineStore('chess', () => {
         _stopClock();
         gamePhase.value = 'over';
         moveFeedback.value = 'Resigned';
+        resultReason.value = 'You resigned';
     };
 
-    /** Switch color — only in lobby. */
-    const switchColor = () => {
+    /**
+     * Take back your last move together with the bot's reply, so the
+     * position returns to the last point where it was your turn.
+     */
+    const takeback = () => {
+        if (gamePhase.value !== 'playing') return;
+        if (botThinking.value) return;
+        if (!isPlayerTurn.value) return;
+        if (fullHistory.value.length < 2) return;
+
+        game.value.undo();
+        game.value.undo();
+        fullHistory.value = fullHistory.value.slice(0, -2);
+        _recomputeCaptured();
+
+        const last = fullHistory.value[fullHistory.value.length - 1];
+        lastMove.value = last ? { from: last.from, to: last.to } : null;
+        lastPlayedMove.value = null;
+        selectedSquare.value = null;
+        legalTargets.value = [];
+        viewCursor.value = null;
+        moveFeedback.value = 'Move taken back';
+        syncBoard();
+    };
+
+    /** Choose which side to play — only in lobby. 'w' | 'b' | 'random'. */
+    const setColorPreference = (preference) => {
         if (gamePhase.value !== 'lobby') return;
-        playerColor.value = playerColor.value === 'w' ? 'b' : 'w';
+        colorPreference.value = preference;
+        // Show the board from the chosen side straight away; 'random' keeps
+        // white's view until startGame() picks a side.
+        playerColor.value = preference === 'random' ? 'w' : preference;
+        flipOverride.value = null;
+    };
+
+    /** Set the time control — only in lobby. `null` = untimed. */
+    const setTimeControl = (control) => {
+        if (gamePhase.value !== 'lobby') return;
+        timeControl.value = control;
     };
 
     /* ================================================================== */
@@ -688,8 +888,12 @@ export const useChessStore = defineStore('chess', () => {
         botProfiles,
         elo,
         playerColor,
+        colorPreference,
         timeControl,
         configLocked,
+        showHints,
+        showCoords,
+        boardFlipped,
         // Phase
         gamePhase,
         // Active game
@@ -701,6 +905,7 @@ export const useChessStore = defineStore('chess', () => {
         capturedBlack,
         lastMove,
         moveFeedback,
+        resultReason,
         moveHistory,
         fullHistory,
         positionFen,
@@ -722,18 +927,27 @@ export const useChessStore = defineStore('chess', () => {
         activeProfile,
         status,
         gameTurnLabel,
+        turn,
+        isPlayerTurn,
+        isCheckmate,
+        canTakeback,
         materialBalance,
+        positionEval,
+        evalPercent,
+        opening,
         movePairs,
         flattenedBoard,
         legalTargetSet,
         kingInCheckSquare,
-        canSwitchColor,
         // Actions
         selectSquare,
         botDelay,
         newGame,
         startGame,
         resign,
-        switchColor,
+        takeback,
+        flipBoard,
+        setColorPreference,
+        setTimeControl,
     };
 });

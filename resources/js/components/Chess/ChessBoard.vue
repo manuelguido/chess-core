@@ -12,11 +12,15 @@ const chess = useChessStore();
 const boardEl = ref(null);
 const squarePx = ref(80);
 const animations = ref(new Map());
+/** Square that just lost a piece — drives the capture ring flash. */
+const captureFlash = ref(null);
 let animSeq = 0;
 let animTimer = null;
+let flashTimer = null;
 let boardRO = null;
 
-const ANIM_DURATION = 170;
+const ANIM_DURATION = 200;
+const FLASH_DURATION = 420;
 
 const measureBoard = () => {
     if (boardEl.value) squarePx.value = boardEl.value.clientWidth / 8;
@@ -33,13 +37,14 @@ onMounted(() => {
 onBeforeUnmount(() => {
     if (boardRO) boardRO.disconnect();
     if (animTimer) clearTimeout(animTimer);
+    if (flashTimer) clearTimeout(flashTimer);
 });
 
 const fileIdx = (sq) => sq.charCodeAt(0) - 97;
 const rankRow = (sq) => 8 - parseInt(sq[1], 10);
 
 const offsetFor = (from, to) => {
-    const sign = boardFlipped.value ? -1 : 1;
+    const sign = chess.boardFlipped ? -1 : 1;
     return {
         dx: sign * (fileIdx(from) - fileIdx(to)) * squarePx.value,
         dy: sign * (rankRow(from) - rankRow(to)) * squarePx.value,
@@ -68,6 +73,16 @@ const scheduleAnimation = (move) => {
         animations.value = new Map();
         animTimer = null;
     }, ANIM_DURATION + 30);
+
+    // A capture (or en passant) pops a ring on the square being taken.
+    if (move.flags && /[ce]/.test(move.flags)) {
+        captureFlash.value = move.to;
+        if (flashTimer) clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => {
+            captureFlash.value = null;
+            flashTimer = null;
+        }, FLASH_DURATION);
+    }
 };
 
 /** Trigger animation whenever the store registers a new move. */
@@ -81,7 +96,6 @@ watch(
 /* ============================================================
    Board perspective
    ============================================================ */
-const boardFlipped = computed(() => chess.playerColor === 'b');
 
 /**
  * Reversing the 64 display tiles puts rank 1 at the top and file h
@@ -89,87 +103,111 @@ const boardFlipped = computed(() => chess.playerColor === 'b');
  * names ("e4", etc.) are unchanged, so all game logic still works.
  */
 const displayTiles = computed(() =>
-    boardFlipped.value
+    chess.boardFlipped
         ? [...chess.flattenedBoard].reverse()
         : chess.flattenedBoard,
 );
 
 /* ============================================================
-   Tile styling
+   Tile state
    ============================================================ */
-const tileClasses = (tile) => {
-    const isSelected =
-        !chess.isReviewing && chess.selectedSquare === tile.square;
-    const isTarget =
-        !chess.isReviewing && chess.legalTargetSet.has(tile.square);
-    const isLast =
-        chess.viewLastMove &&
-        (chess.viewLastMove.from === tile.square ||
-            chess.viewLastMove.to === tile.square);
+const isSelected = (tile) =>
+    !chess.isReviewing && chess.selectedSquare === tile.square;
 
-    return [
-        'square',
-        tile.dark ? 'square--dark' : 'square--light',
-        isSelected && 'square--selected',
-        isTarget && 'square--target',
-        isTarget && tile.piece && 'square--has-piece',
-        isLast && 'square--last',
-        chess.kingInCheckSquare === tile.square && 'square--check',
-    ];
+const isTarget = (tile) =>
+    !chess.isReviewing && chess.legalTargetSet.has(tile.square);
+
+const isLastMove = (tile) =>
+    !!chess.viewLastMove &&
+    (chess.viewLastMove.from === tile.square ||
+        chess.viewLastMove.to === tile.square);
+
+const isCheckSquare = (tile) => chess.kingInCheckSquare === tile.square;
+
+/** Only your own pieces and legal destinations invite a click. */
+const isPlayable = (tile) =>
+    chess.gamePhase === 'playing' &&
+    !chess.isReviewing &&
+    chess.isPlayerTurn &&
+    !chess.botThinking &&
+    (tile.piece?.color === chess.playerColor || isTarget(tile));
+
+const showRank = (tile) =>
+    chess.showCoords &&
+    (chess.boardFlipped ? tile.fileIndex === 7 : tile.fileIndex === 0);
+
+const showFile = (tile) =>
+    chess.showCoords &&
+    (chess.boardFlipped ? tile.rowIndex === 0 : tile.rowIndex === 7);
+
+const motionStyle = (tile) => {
+    const anim = animations.value.get(tile.square);
+    if (!anim) return null;
+    return { '--mv-x': `${anim.dx}px`, '--mv-y': `${anim.dy}px` };
 };
 </script>
 
 <template>
-    <div class="board-frame board-size">
-        <div ref="boardEl" class="board" role="grid" aria-label="Chess board">
-            <button
-                v-for="tile in displayTiles"
-                :key="tile.square"
-                type="button"
-                role="gridcell"
-                :aria-label="`${tile.square} ${tile.piece ? (tile.piece.color === 'w' ? 'white' : 'black') + ' ' + tile.piece.type : 'empty'}`"
-                :class="tileClasses(tile)"
-                @click="chess.selectSquare(tile)"
-            >
-                <ChessPiece
-                    v-if="tile.piece"
-                    :key="animations.get(tile.square)?.id ?? 0"
-                    :class="[
-                        'piece',
-                        animations.has(tile.square) && 'piece--moving',
-                    ]"
-                    :style="
-                        animations.get(tile.square)
-                            ? {
-                                  '--mv-x':
-                                      animations.get(tile.square).dx + 'px',
-                                  '--mv-y':
-                                      animations.get(tile.square).dy + 'px',
-                              }
-                            : null
-                    "
-                    :color="tile.piece.color"
-                    :type="tile.piece.type"
-                />
-                <span
-                    v-if="
-                        boardFlipped
-                            ? tile.fileIndex === 7
-                            : tile.fileIndex === 0
-                    "
-                    class="coord coord--rank"
-                >
-                    {{ tile.square[1] }}
-                </span>
-                <span
-                    v-if="
-                        boardFlipped ? tile.rowIndex === 0 : tile.rowIndex === 7
-                    "
-                    class="coord coord--file"
-                >
-                    {{ tile.square[0] }}
-                </span>
-            </button>
-        </div>
+    <div
+        ref="boardEl"
+        class="board w-full xl:h-full xl:w-auto"
+        role="grid"
+        aria-label="Chess board"
+    >
+        <button
+            v-for="tile in displayTiles"
+            :key="tile.square"
+            type="button"
+            role="gridcell"
+            :aria-label="`${tile.square} ${tile.piece ? (tile.piece.color === 'w' ? 'white' : 'black') + ' ' + tile.piece.type : 'empty'}`"
+            :class="[
+                'square',
+                tile.dark ? 'square--dark' : 'square--light',
+                isPlayable(tile) && 'square--playable',
+            ]"
+            @click="chess.selectSquare(tile)"
+        >
+            <span
+                v-if="isCheckSquare(tile)"
+                :class="[
+                    'square__wash square__wash--check',
+                    chess.isCheckmate && 'square__wash--mate',
+                ]"
+            />
+            <span
+                v-else-if="isSelected(tile)"
+                class="square__wash square__wash--selected"
+            />
+            <span
+                v-else-if="isLastMove(tile)"
+                class="square__wash square__wash--last"
+            />
+
+            <span v-if="captureFlash === tile.square" class="square__flash" />
+
+            <ChessPiece
+                v-if="tile.piece"
+                :key="animations.get(tile.square)?.id ?? 0"
+                :class="[
+                    'piece',
+                    animations.has(tile.square) && 'piece--moving',
+                ]"
+                :style="motionStyle(tile)"
+                :color="tile.piece.color"
+                :type="tile.piece.type"
+            />
+
+            <span
+                v-if="isTarget(tile)"
+                :class="tile.piece ? 'square__ring' : 'square__dot'"
+            />
+
+            <span v-if="showRank(tile)" class="coord coord--rank">
+                {{ tile.square[1] }}
+            </span>
+            <span v-if="showFile(tile)" class="coord coord--file">
+                {{ tile.square[0] }}
+            </span>
+        </button>
     </div>
 </template>

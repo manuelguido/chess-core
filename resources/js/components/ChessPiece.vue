@@ -7,9 +7,10 @@
  *     used by Lichess (GPL-2.0+). They are widely accepted as the
  *     gold-standard modern Staunton representation.
  *   • Each piece reads instantly from across the board:
- *       - white pieces: clean porcelain fill with navy outline
- *       - black pieces: deep marine fill with darker navy stroke
- *     Both give excellent contrast on the steel-blue board squares.
+ *       - white pieces: warm bone fill with a near-black outline
+ *       - black pieces: graphite fill with a cooler edge highlight
+ *     Both are tuned for the graphite board (#7E8B99 / #3D4652), where the
+ *     black piece has to separate from the dark square without going flat.
  *   • Stroke widths are tuned for crisp 64–96 px rendering.
  */
 import { computed } from 'vue';
@@ -23,10 +24,10 @@ const props = defineProps({
 
 const isWhite = computed(() => props.color === 'w');
 
-const fill = computed(() => (isWhite.value ? '#fbfbf8' : '#123847'));
-const stroke = computed(() => (isWhite.value ? '#10242c' : '#071d27'));
+const fill = computed(() => (isWhite.value ? '#f4f2ed' : '#191e24'));
+const stroke = computed(() => (isWhite.value ? '#14181d' : '#05070a'));
 /* Subtle inner highlight strokes used for engraved details */
-const detail = computed(() => (isWhite.value ? '#10242c' : '#607984'));
+const detail = computed(() => (isWhite.value ? '#14181d' : '#6b7480'));
 
 const label = computed(() => {
     const names = {

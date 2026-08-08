@@ -393,6 +393,32 @@ export const useChessStore = defineStore('chess', () => {
         return Math.max(4, Math.min(96, 50 + clamped * 5.75));
     });
 
+    /**
+     * Everything the clock cards need for one side, resolved in one place.
+     * In the lobby there is no running clock yet, so the card previews the
+     * configured base time instead of sitting at 0:00.
+     */
+    const _clockFor = (color) => {
+        const timed = !!timeControl.value;
+        const seconds = !timed
+            ? null
+            : gamePhase.value === 'lobby'
+              ? timeControl.value.base
+              : clocks.value[color];
+        return {
+            seconds,
+            active: gamePhase.value === 'playing' && turn.value === color,
+            low: timed && seconds != null && seconds <= 30,
+            fraction:
+                timed && seconds != null ? seconds / timeControl.value.base : 1,
+        };
+    };
+
+    const playerClock = computed(() => _clockFor(playerColor.value));
+    const opponentClock = computed(() =>
+        _clockFor(playerColor.value === 'w' ? 'b' : 'w'),
+    );
+
     /** Longest matching opening prefix, or a "custom position" fallback. */
     const opening = computed(() => {
         const line = moveHistory.value.join(' ');
@@ -935,6 +961,8 @@ export const useChessStore = defineStore('chess', () => {
         positionEval,
         evalPercent,
         opening,
+        playerClock,
+        opponentClock,
         movePairs,
         flattenedBoard,
         legalTargetSet,

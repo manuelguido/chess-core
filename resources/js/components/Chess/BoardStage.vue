@@ -29,32 +29,14 @@ const strip = (color) => {
     const takenColor = color === 'w' ? 'b' : 'w';
     const taken = color === 'w' ? chess.capturedBlack : chess.capturedWhite;
 
-    const timed = !!chess.timeControl;
-    const seconds = !timed
-        ? null
-        : chess.gamePhase === 'lobby'
-          ? chess.timeControl.base
-          : chess.clocks[color];
-
     return {
         name: mine ? 'You' : (chess.activeProfile?.name ?? 'Engine'),
         role: mine ? '' : `ENGINE · ${chess.activeProfile?.style ?? ''}`,
         rating: mine ? null : chess.elo,
         isEngine: !mine,
         active: chess.gamePhase === 'playing' && chess.turn === color,
-        thinking: !mine && chess.botThinking,
-        prompt:
-            mine &&
-            chess.gamePhase === 'playing' &&
-            chess.isPlayerTurn &&
-            !chess.botThinking &&
-            !chess.isReviewing,
         captured: taken.map((type) => ({ color: takenColor, type })),
         advantage: ahead ? Math.abs(balance) : null,
-        seconds,
-        low: timed && seconds != null && seconds <= 30,
-        clockFraction:
-            timed && seconds != null ? seconds / chess.timeControl.base : 1,
     };
 };
 
@@ -77,39 +59,54 @@ const statusText = computed(() =>
 
 <template>
     <!--
-        Below xl the board is width-driven and the page scrolls. At xl the
-        stage is exactly as tall as its column and the board sizes itself
-        from the leftover height, so it can never push the shell into
-        scrolling no matter how short the viewport is.
+        Below xl the board is width-driven and the page scrolls.
+
+        At xl the board must be driven by the *height* left over in the
+        column, or a short viewport would push the shell into scrolling.
+        That cannot be done with plain flex — a height-driven square inside
+        a shrink-to-fit column makes width depend on itself. So the board
+        row becomes a positioning context and the board is taken out of
+        flow, where `height:100%` + `aspect-ratio` resolves cleanly. The
+        stage's own max-width mirrors the same arithmetic so the strips line
+        up with the board edges; if it is ever off, the board stays square
+        and merely sits a little narrower than the strips.
     -->
     <div
-        class="flex w-full max-w-[min(76vh,100%)] flex-col gap-2.5 xl:h-full xl:w-fit xl:max-w-full"
+        class="flex w-full max-w-[min(76vh,100%)] flex-col gap-2.5 xl:h-full xl:max-w-[calc(100dvh-220px)]"
     >
         <PlayerStrip v-bind="topStrip" />
 
-        <div class="flex min-h-0 flex-1 items-stretch justify-center gap-2.5">
-            <!-- Eval bar: white's share of the static evaluation -->
+        <div class="min-h-0 xl:relative xl:flex-1">
             <div
-                class="relative w-[11px] shrink-0 overflow-hidden rounded-[3px] border border-[#1C232B] bg-bg-hover"
-                :title="`Evaluation ${chess.positionEval > 0 ? '+' : ''}${chess.positionEval}`"
+                class="flex items-stretch gap-2.5 xl:absolute xl:inset-y-0 xl:left-1/2 xl:-translate-x-1/2"
             >
+                <!-- Eval bar: white's share of the static evaluation -->
                 <div
-                    class="absolute inset-x-0 bottom-0 bg-[#E4E7EB] transition-[height] duration-350 ease-out"
-                    :style="{ height: `${chess.evalPercent}%` }"
-                />
-                <div class="absolute inset-x-0 top-1/4 h-px bg-white/[0.07]" />
-                <div class="absolute inset-x-0 top-1/2 h-px bg-accent/55" />
-                <div class="absolute inset-x-0 top-3/4 h-px bg-white/[0.07]" />
-            </div>
+                    class="relative w-[11px] shrink-0 overflow-hidden rounded-[3px] border border-[#1C232B] bg-bg-hover"
+                    :title="`Evaluation ${chess.positionEval > 0 ? '+' : ''}${chess.positionEval}`"
+                >
+                    <div
+                        class="absolute inset-x-0 bottom-0 bg-[#E4E7EB] transition-[height] duration-350 ease-out"
+                        :style="{ height: `${chess.evalPercent}%` }"
+                    />
+                    <div
+                        class="absolute inset-x-0 top-1/4 h-px bg-white/[0.07]"
+                    />
+                    <div class="absolute inset-x-0 top-1/2 h-px bg-accent/55" />
+                    <div
+                        class="absolute inset-x-0 top-3/4 h-px bg-white/[0.07]"
+                    />
+                </div>
 
-            <ChessBoard />
+                <ChessBoard />
+            </div>
         </div>
 
         <PlayerStrip v-bind="bottomStrip" />
 
         <div class="mt-0.5 flex flex-wrap items-center gap-2">
             <div
-                class="flex items-center gap-2 rounded-md border px-2.5 py-1.5"
+                class="flex min-w-0 flex-auto items-center gap-2 rounded-md border px-2.5 py-1.5 whitespace-nowrap"
                 :class="
                     chess.gamePhase === 'over'
                         ? 'border-[#3A241F] bg-bg-panel'

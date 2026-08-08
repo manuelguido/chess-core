@@ -29,7 +29,7 @@ chess.botProfiles = props.botProfiles;
         <AppHeader />
 
         <div
-            class="flex flex-1 flex-col xl:grid xl:min-h-0 xl:grid-cols-[268px_minmax(0,1fr)_332px]"
+            class="flex flex-1 flex-col xl:grid xl:min-h-0 xl:grid-cols-[268px_minmax(0,1fr)_356px]"
         >
             <SetupRail
                 class="order-2 border-t border-line xl:order-1 xl:overflow-y-auto xl:border-t-0 xl:border-r"

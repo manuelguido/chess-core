@@ -137,6 +137,167 @@ function setup(t, { base = 60, playerColor = 'w', ready = true } = {}) {
     return { store, workers, pinia, select, move, beginSearch };
 }
 
+function playLine(context, moves) {
+    const { store, workers, move } = context;
+    for (const uci of moves) {
+        const from = uci.slice(0, 2);
+        const to = uci.slice(2, 4);
+        if (store.turn === store.playerColor) move(from, to);
+        else workers[0].reply({ from, to });
+    }
+}
+
+function prepareCastling(t, playerColor = 'w') {
+    const context = setup(t, { playerColor });
+    context.store.startGame();
+    playLine(context, [
+        'd2d4',
+        'd7d5',
+        'b1c3',
+        'b8c6',
+        'c1f4',
+        'c8f5',
+        'd1d2',
+        'd8d7',
+        'e2e3',
+        'e7e6',
+        'f1d3',
+        'f8d6',
+        'g1f3',
+        'g8f6',
+    ]);
+    if (playerColor === 'b') playLine(context, ['a2a3']);
+    assert.equal(context.store.isPlayerTurn, true);
+    return context;
+}
+
+for (const color of ['w', 'b']) {
+    for (const side of ['kingside', 'queenside']) {
+        for (const targetType of ['rook', 'destination']) {
+            test(`${color} can castle ${side} by clicking the ${targetType}`, (t) => {
+                const { store, workers, select } = prepareCastling(t, color);
+                const rank = color === 'w' ? '1' : '8';
+                const kingTarget = `${side === 'kingside' ? 'g' : 'c'}${rank}`;
+                const rookFrom = `${side === 'kingside' ? 'h' : 'a'}${rank}`;
+                const rookTarget = `${side === 'kingside' ? 'f' : 'd'}${rank}`;
+                const requestsBefore = workers[0].requests.length;
+                store.showHints = false;
+                select(`e${rank}`);
+                assert.ok(store.legalTargets.includes(kingTarget));
+                select(targetType === 'rook' ? rookFrom : kingTarget);
+                assert.equal(
+                    store.moveHistory.at(-1),
+                    side === 'kingside' ? 'O-O' : 'O-O-O',
+                );
+                assert.equal(
+                    store.flattenedBoard.find(
+                        (tile) => tile.square === kingTarget,
+                    ).piece?.type,
+                    'k',
+                );
+                assert.equal(
+                    store.flattenedBoard.find(
+                        (tile) => tile.square === rookTarget,
+                    ).piece?.type,
+                    'r',
+                );
+                assert.equal(
+                    store.flattenedBoard.find(
+                        (tile) => tile.square === rookFrom,
+                    ).piece,
+                    null,
+                );
+                assert.equal(store.selectedSquare, null);
+                assert.equal(workers[0].requests.length, requestsBefore + 1);
+                assert.equal(
+                    store.lastPlayedMove.flags,
+                    side === 'kingside' ? 'k' : 'q',
+                );
+            });
+        }
+    }
+}
+
+for (const scenario of [
+    { name: 'pieces block the path', moves: [] },
+    {
+        name: 'the king is in check',
+        moves: ['d2d4', 'c7c6', 'e2e3', 'd7d6', 'g1f3', 'b8d7', 'f1d3', 'd8a5'],
+    },
+    {
+        name: 'the king would cross an attacked square',
+        moves: ['e2e4', 'd7d5', 'g1f3', 'c8f5', 'f1c4', 'f5h3', 'g2g3', 'd5d4'],
+    },
+]) {
+    test(`clicking the rook does not castle when ${scenario.name}`, (t) => {
+        const context = setup(t);
+        const { store, select } = context;
+        store.startGame();
+        playLine(context, scenario.moves);
+        const position = store.positionFen;
+        select('e1');
+        assert.equal(store.legalTargets.includes('g1'), false);
+        select('h1');
+        assert.equal(store.positionFen, position);
+        assert.equal(store.selectedSquare, 'h1');
+    });
+}
+
+for (const movedPiece of ['king', 'rook']) {
+    test(`clicking the rook cannot restore castling rights after the ${movedPiece} moved`, (t) => {
+        const context = prepareCastling(t);
+        const { store, select } = context;
+        playLine(
+            context,
+            movedPiece === 'king'
+                ? ['e1f1', 'a7a6', 'f1e1', 'a6a5']
+                : ['h1g1', 'a7a6', 'g1h1', 'a6a5'],
+        );
+        const position = store.positionFen;
+        select('e1');
+        assert.equal(store.legalTargets.includes('g1'), false);
+        select('h1');
+        assert.equal(store.positionFen, position);
+        assert.equal(store.selectedSquare, 'h1');
+    });
+}
+
+test('clicking a rook still selects and moves it when the king is not selected', (t) => {
+    const { store, select } = prepareCastling(t);
+    select('d2');
+    select('h1');
+    assert.equal(store.selectedSquare, 'h1');
+    select('f1');
+    assert.equal(store.moveHistory.at(-1), 'Rf1');
+    assert.equal(
+        store.flattenedBoard.find((tile) => tile.square === 'e1').piece?.type,
+        'k',
+    );
+});
+
+for (const reply of ['a7a6', 'f5d3']) {
+    test(`rook-click castling premove ${reply === 'a7a6' ? 'executes if still legal' : 'is discarded if the reply makes it illegal'}`, (t) => {
+        const context = prepareCastling(t);
+        const { store, workers, select } = context;
+        playLine(context, ['h2h3']);
+        select('e1');
+        select('h1');
+        assert.deepEqual(store.premove, { from: 'e1', to: 'g1' });
+        const movesBefore = store.moveHistory.length;
+        playLine(context, [reply]);
+        assert.equal(store.premove, null);
+        if (reply === 'a7a6') {
+            assert.equal(store.moveHistory.at(-1), 'O-O');
+            assert.equal(store.moveHistory.length, movesBefore + 2);
+            assert.equal(workers[0].requests.at(-1).moves.at(-1), 'e1g1');
+        } else {
+            assert.equal(store.moveHistory.at(-1), 'Bxd3');
+            assert.equal(store.moveHistory.length, movesBefore + 1);
+            assert.equal(store.isPlayerTurn, true);
+        }
+    });
+}
+
 test('engine warms once in the lobby and starting waits for readiness', (t) => {
     const { store, workers } = setup(t, { ready: false });
     store.startGame();

@@ -247,7 +247,12 @@ const onPointerDown = (tile, event) => {
     // Selecting on press means a drag and a click share one code path, and
     // the piece lights up the instant you touch it.
     chess.selectSquare(tile);
-    if (chess.selectedSquare !== tile.square) return;
+    if (chess.selectedSquare !== tile.square) {
+        // Pressing the rook can already castle or queue a castling premove.
+        // Do not process the following click as another selection.
+        suppressClick = true;
+        return;
+    }
 
     // Stops the browser starting its own image drag / text selection.
     event.preventDefault();

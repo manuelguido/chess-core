@@ -720,16 +720,39 @@ export const useChessStore = defineStore('chess', () => {
         }
     };
 
+    /** The rook is an alternate click target for a legal king castling move. */
+    const castlingTarget = (tile) => {
+        const rank = playerColor.value === 'w' ? '1' : '8';
+        if (
+            selectedSquare.value !== `e${rank}` ||
+            game.value.get(selectedSquare.value)?.type !== 'k' ||
+            tile.piece?.type !== 'r' ||
+            tile.piece.color !== playerColor.value
+        )
+            return null;
+
+        const target =
+            tile.square === `h${rank}`
+                ? `g${rank}`
+                : tile.square === `a${rank}`
+                  ? `c${rank}`
+                  : null;
+        // These destinations come from chess.js, including castling rights,
+        // clear paths and checks. Premoves are checked again before playing.
+        return legalTargets.value.includes(target) ? target : null;
+    };
+
     /** Click/drop handling while the engine is on move: queue, don't play. */
     const _selectForPremove = (tile) => {
+        const target = castlingTarget(tile) ?? tile.square;
+        if (selectedSquare.value && legalTargets.value.includes(target)) {
+            premove.value = { from: selectedSquare.value, to: target };
+            clearSelection();
+            return;
+        }
         if (tile.piece?.color === playerColor.value) {
             selectedSquare.value = tile.square;
             legalTargets.value = premoveTargets(tile.square);
-            return;
-        }
-        if (selectedSquare.value && legalTargets.value.includes(tile.square)) {
-            premove.value = { from: selectedSquare.value, to: tile.square };
-            clearSelection();
             return;
         }
         // Anywhere else cancels both the pick-up and any queued premove.
@@ -759,6 +782,12 @@ export const useChessStore = defineStore('chess', () => {
         }
 
         if (botThinking.value) return;
+
+        const castle = castlingTarget(tile);
+        if (castle) {
+            makePlayerMove(castle);
+            return;
+        }
 
         if (tile.piece?.color === playerColor.value) {
             selectedSquare.value = tile.square;

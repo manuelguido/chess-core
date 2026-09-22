@@ -29,7 +29,9 @@ The rules of chess are handled by [`chess.js`](https://www.npmjs.com/package/che
 - current phase: lobby, playing, or over
 - bot-thinking state
 
-The computer opponent is implemented in `resources/js/stores/useChessStore.js`. It is a client-side heuristic minimax bot with alpha-beta pruning, material and center-control evaluation, and a temperature-based move picker. The strength slider maps to search depth, move randomness, simplicity bias, and occasional shallow searches so lower-strength play is less deterministic.
+The computer opponent runs in a dedicated Web Worker, with its search implemented in `resources/js/engine/chessEngine.js`. It is a client-side heuristic minimax bot with alpha-beta pruning, material and center-control evaluation, and a temperature-based move picker. The strength slider maps to search depth and move randomness. Iterative deepening searches within a time and node budget, keeping the board, clocks, and controls responsive at higher settings.
+
+The store sends a position and move history to the worker and validates its reply before applying a move. Resetting or ending a game cancels pending work, and a legal fallback move keeps play going if the worker fails. Move history is preserved for repetition detection.
 
 The ELO labels are UI tuning profiles, not measured ratings.
 
@@ -45,7 +47,13 @@ resources/js/Pages/Chess/Index.vue
     Top-level chess screen.
 
 resources/js/stores/useChessStore.js
-    Game state, move handling, clocks, history navigation, and bot logic.
+    Game state, move handling, clocks, history navigation, and worker lifecycle.
+
+resources/js/engine/chessEngine.js
+    Bounded iterative-deepening search and position evaluation.
+
+resources/js/workers/chessEngine.worker.js
+    Runs move searches off the UI thread.
 
 resources/js/components/Chess/
     Board, controls, sidebars, settings, clock, captured pieces, and panels.
@@ -54,7 +62,7 @@ resources/js/composables/useChessSound.js
     Procedural Web Audio sounds for moves and game events.
 
 tests/
-    Framework smoke tests; chess-specific coverage is not in place yet.
+    Framework smoke tests and JavaScript engine/game lifecycle regressions.
 ```
 
 ## Stack
@@ -65,7 +73,7 @@ tests/
 | Frontend | Vue 3, Pinia, Vite, Tailwind CSS 4 |
 | Chess | `chess.js`, custom minimax bot |
 | UI | lucide-vue-next |
-| Quality | PHPUnit, Laravel Pint, ESLint, Prettier |
+| Quality | PHPUnit, Node.js test runner, Laravel Pint, ESLint, Prettier |
 
 ## Local Setup
 
@@ -127,6 +135,7 @@ composer lint
 Run frontend checks and formatting:
 
 ```bash
+npm test
 npm run lint:check
 npm run format:check
 ```
@@ -154,7 +163,7 @@ Clock state is handled in the store with one interval. In timed games, the side 
 - Games are not persisted to the database.
 - The current bot is not a UCI engine integration.
 - Promotion always promotes to a queen.
-- Chess-specific tests for clock behavior, move review, and game lifecycle would be the next useful addition.
+- Bot strength depends on the device and available search budget; ELO labels remain uncalibrated.
 
 ## Contributing
 
@@ -170,6 +179,7 @@ Before opening a pull request, run:
 
 ```bash
 composer test
+npm test
 npm run lint:check
 npm run format:check
 npm run build

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue';
 import { Chess } from 'chess.js';
 import { useChessSound } from '../composables/useChessSound.js';
 
@@ -19,45 +19,6 @@ const extendedCenterSquares = new Set([
     'e6',
     'f6',
 ]);
-
-/* ------------------------------------------------------------------ */
-/* ELO → engine parameters                                             */
-/* ------------------------------------------------------------------ */
-const engineParams = (elo) => {
-    // depth     — plies to search
-    // temperature — Boltzmann selection temperature in centipawns.
-    //               High = roughly uniform pick (weak), low = near-deterministic (strong).
-    //               Replaces the old noise+blunderRate combo with a single, smooth knob.
-    // simplicity — 0-1 bonus weight applied to human-instinct moves (captures, checks).
-    //               Simulates pattern recognition over deep calculation at low ELO.
-    // laziness   — 0-1 probability of searching at depth-1 instead of full depth per candidate.
-    //               Simulates inconsistent calculation: bot occasionally misses 2-move tactics.
-    if (elo <= 800)
-        return { depth: 1, temperature: 320, simplicity: 0.9, laziness: 0.6 };
-    if (elo <= 900)
-        return { depth: 1, temperature: 240, simplicity: 0.8, laziness: 0.5 };
-    if (elo <= 1000)
-        return { depth: 2, temperature: 180, simplicity: 0.7, laziness: 0.4 };
-    if (elo <= 1100)
-        return { depth: 2, temperature: 130, simplicity: 0.6, laziness: 0.3 };
-    if (elo <= 1200)
-        return { depth: 2, temperature: 100, simplicity: 0.45, laziness: 0.2 };
-    if (elo <= 1300)
-        return { depth: 3, temperature: 75, simplicity: 0.35, laziness: 0.15 };
-    if (elo <= 1400)
-        return { depth: 3, temperature: 55, simplicity: 0.25, laziness: 0.08 };
-    if (elo <= 1500)
-        return { depth: 3, temperature: 38, simplicity: 0.15, laziness: 0.04 };
-    if (elo <= 1600)
-        return { depth: 4, temperature: 22, simplicity: 0.07, laziness: 0.02 };
-    if (elo <= 1800)
-        return { depth: 4, temperature: 10, simplicity: 0.02, laziness: 0.0 };
-    if (elo <= 2000)
-        return { depth: 4, temperature: 4, simplicity: 0.0, laziness: 0.0 };
-    if (elo <= 2200)
-        return { depth: 5, temperature: 2, simplicity: 0.0, laziness: 0.0 };
-    return { depth: 5, temperature: 0, simplicity: 0.0, laziness: 0.0 };
-};
 
 /* ------------------------------------------------------------------ */
 /* Opening book — longest SAN prefix wins                              */
@@ -217,6 +178,7 @@ export const useChessStore = defineStore('chess', () => {
     };
 
     const _timeOut = (color) => {
+        _cancelBotMove();
         _stopClock();
         gamePhase.value = 'over';
         const reason =
@@ -562,6 +524,7 @@ export const useChessStore = defineStore('chess', () => {
             to: move.to,
             flags: move.flags,
             color: move.color,
+            promotion: move.promotion,
             // Recorded so a takeback can rebuild the captured lists exactly.
             captured: move.captured ?? null,
             fen: game.value.fen(),
@@ -582,6 +545,26 @@ export const useChessStore = defineStore('chess', () => {
     /* SECTION G — Player / bot actions                                    */
     /* ================================================================== */
     let botTimer = null;
+    let botWorker = null;
+    let botWatchdog = null;
+    let botRequestId = 0;
+    let pendingBotRequest = null;
+
+    const _cancelBotMove = () => {
+        if (botTimer !== null) clearTimeout(botTimer);
+        if (botWatchdog !== null) clearTimeout(botWatchdog);
+        botTimer = null;
+        botWatchdog = null;
+        pendingBotRequest = null;
+        botWorker?.terminate();
+        botWorker = null;
+        botThinking.value = false;
+    };
+
+    onScopeDispose(() => {
+        _cancelBotMove();
+        _stopClock();
+    });
 
     /**
      * Squares a piece could move to if it were already your turn.
@@ -687,6 +670,7 @@ export const useChessStore = defineStore('chess', () => {
     /** Shared tail for any committed player move: end the game, or let the engine reply. */
     const _handOverToBot = () => {
         if (game.value.isGameOver()) {
+            _cancelBotMove();
             gamePhase.value = 'over';
             _stopClock();
             return;
@@ -727,21 +711,118 @@ export const useChessStore = defineStore('chess', () => {
         _handOverToBot();
     };
 
-    const makeBotMove = () => {
-        const move = chooseBotMove();
+    const _isCurrentBotRequest = (request) =>
+        request === pendingBotRequest &&
+        gamePhase.value === 'playing' &&
+        game.value.turn() !== playerColor.value &&
+        game.value.fen() === request.fen;
+
+    const _finishBotMove = (request, candidate) => {
+        if (!_isCurrentBotRequest(request)) return;
+        if (botWatchdog !== null) clearTimeout(botWatchdog);
+        botWatchdog = null;
+        pendingBotRequest = null;
+
+        // Validate against the live board. A worker failure gets one legal
+        // fallback, never a synchronous search on the interface thread.
+        const legalMoves = game.value.moves({ verbose: true });
+        const move =
+            legalMoves.find(
+                (legal) =>
+                    legal.from === candidate?.from &&
+                    legal.to === candidate?.to &&
+                    legal.promotion === candidate?.promotion,
+            ) ?? legalMoves[0];
         if (move) {
             const played = game.value.move(move);
             registerMove(played, 'bot');
             syncBoard();
         }
+        // Targets selected during thinking were only a premove preview.
+        clearSelection();
         botThinking.value = false;
-        botTimer = null;
         if (game.value.isGameOver()) {
+            _cancelBotMove();
             gamePhase.value = 'over';
             _stopClock();
             return;
         }
         _tryPremove();
+    };
+
+    const _failBotRequest = (request) => {
+        if (!_isCurrentBotRequest(request)) return;
+        botWorker?.terminate();
+        botWorker = null;
+        _finishBotMove(request, null);
+    };
+
+    const makeBotMove = () => {
+        botTimer = null;
+        if (
+            gamePhase.value !== 'playing' ||
+            game.value.turn() === playerColor.value ||
+            pendingBotRequest
+        )
+            return;
+
+        const request = {
+            id: ++botRequestId,
+            fen: game.value.fen(),
+        };
+        pendingBotRequest = request;
+        // Leave room for interaction even on slow devices, and hurry when
+        // the bot's clock is almost empty. ELO still controls target depth.
+        const remaining = clocks.value[game.value.turn()];
+        const timeBudgetMs = timeControl.value
+            ? Math.max(50, Math.min(750, remaining * 50))
+            : 750;
+
+        try {
+            if (!botWorker) {
+                const worker = new Worker(
+                    new URL(
+                        '../workers/chessEngine.worker.js',
+                        import.meta.url,
+                    ),
+                    { type: 'module' },
+                );
+                botWorker = worker;
+                worker.onmessage = ({ data }) => {
+                    const active = pendingBotRequest;
+                    if (
+                        botWorker !== worker ||
+                        !active ||
+                        data?.id !== active.id ||
+                        data?.fen !== active.fen
+                    )
+                        return;
+                    if (data.error) _failBotRequest(active);
+                    else _finishBotMove(active, data.move);
+                };
+                const failed = () => {
+                    if (botWorker === worker && pendingBotRequest)
+                        _failBotRequest(pendingBotRequest);
+                };
+                worker.onerror = failed;
+                worker.onmessageerror = failed;
+            }
+            // Also recover if loading or running the worker never completes.
+            botWatchdog = setTimeout(
+                () => _failBotRequest(request),
+                timeBudgetMs + 1500,
+            );
+            botWorker.postMessage({
+                ...request,
+                moves: fullHistory.value.map(
+                    (move) => move.from + move.to + (move.promotion ?? ''),
+                ),
+                elo: elo.value,
+                timeBudgetMs,
+            });
+        } catch {
+            _failBotRequest(request);
+        }
     };
 
     /* ================================================================== */
@@ -787,107 +868,12 @@ export const useChessStore = defineStore('chess', () => {
             (base + complexityBonus + variance + spike) *
             recaptureRatio *
             clockRatio;
-        return Math.max(180, Math.min(5500, total));
-    };
-
-    const chooseBotMove = () => {
-        const moves = game.value.moves({ verbose: true });
-        if (moves.length === 0) return null;
-
-        const { depth, temperature, simplicity, laziness } = engineParams(
-            elo.value,
-        );
-        // bot = side opposite the player
-        const botIsBlack = playerColor.value === 'w';
-
-        // Score each candidate move
-        const scored = moves.map((move) => {
-            // Laziness: occasionally search one ply shallower → misses some 2-move tactics
-            const searchDepth =
-                laziness > 0 && Math.random() < laziness
-                    ? Math.max(0, depth - 1)
-                    : depth;
-
-            game.value.move(move);
-            const rawScore = minimax(
-                searchDepth - 1,
-                -Infinity,
-                Infinity,
-                !botIsBlack,
-            );
-            game.value.undo();
-
-            // Simplicity bias: bonus for human-instinct moves so mid-ELO bots
-            // prefer captures and checks the way real players do.
-            // Sign is from bot's perspective (positive = good for bot).
-            const sign = botIsBlack ? -1 : 1;
-            const captureBonus = move.captured ? simplicity * 45 * sign : 0;
-            const checkBonus =
-                move.san.includes('+') || move.san.includes('#')
-                    ? simplicity * 22 * sign
-                    : 0;
-
-            return { move, score: rawScore + captureBonus + checkBonus };
-        });
-
-        // --- Boltzmann (softmax) selection ---
-        // temperature = 0  → deterministic best move (engine-like)
-        // temperature > 0  → probabilistic; higher T = more varied, human-like selection
-        if (temperature === 0) {
-            return scored.reduce((best, s) =>
-                (botIsBlack ? s.score < best.score : s.score > best.score)
-                    ? s
-                    : best,
-            ).move;
-        }
-
-        // Convert raw eval to "bot advantage" (higher = better for bot)
-        const botAdvantage = scored.map((s) =>
-            botIsBlack ? -s.score : s.score,
-        );
-        // Shift by max to keep exp() numerically stable
-        const maxAdv = Math.max(...botAdvantage);
-        const weights = botAdvantage.map((adv) =>
-            Math.exp((adv - maxAdv) / temperature),
-        );
-
-        const total = weights.reduce((a, b) => a + b, 0);
-        let rand = Math.random() * total;
-        for (let i = 0; i < scored.length; i++) {
-            rand -= weights[i];
-            if (rand <= 0) return scored[i].move;
-        }
-        return scored[scored.length - 1].move; // numerical fallback
-    };
-
-    const minimax = (depth, alpha, beta, maxWhite) => {
-        if (depth === 0 || game.value.isGameOver()) return evaluatePosition();
-        const moves = game.value.moves({ verbose: true });
-        if (maxWhite) {
-            let best = -Infinity;
-            for (const m of moves) {
-                game.value.move(m);
-                best = Math.max(best, minimax(depth - 1, alpha, beta, false));
-                game.value.undo();
-                alpha = Math.max(alpha, best);
-                if (beta <= alpha) break;
-            }
-            return best;
-        }
-        let best = Infinity;
-        for (const m of moves) {
-            game.value.move(m);
-            best = Math.min(best, minimax(depth - 1, alpha, beta, true));
-            game.value.undo();
-            beta = Math.min(beta, best);
-            if (beta <= alpha) break;
-        }
-        return best;
+        return Math.max(180, Math.min(1200, total));
     };
 
     /**
      * Static evaluation in centipawns, positive = better for white.
-     * Defaults to the live game so the search can call it with no argument.
+     * Used only for the displayed position; search runs in a worker.
      */
     const evaluatePosition = (position = game.value) => {
         if (position.isCheckmate())
@@ -923,10 +909,7 @@ export const useChessStore = defineStore('chess', () => {
     };
 
     const _resetBoard = () => {
-        if (botTimer) {
-            clearTimeout(botTimer);
-            botTimer = null;
-        }
+        _cancelBotMove();
         _stopClock();
         game.value = new Chess();
         board.value = game.value.board();
@@ -983,6 +966,7 @@ export const useChessStore = defineStore('chess', () => {
     /** Resign ends the current game, puts into 'over' state. */
     const resign = () => {
         if (gamePhase.value !== 'playing') return;
+        _cancelBotMove();
         _stopClock();
         gamePhase.value = 'over';
         moveFeedback.value = 'Resigned';

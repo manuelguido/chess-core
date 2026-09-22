@@ -1,0 +1,14 @@
+Stockfish.js 18 (stockfish npm package 18.0.8)
+Copyright (c) 2026 Chess.com, LLC and Stockfish contributors.
+Distributed under the GNU General Public License, version 3.
+The complete license is in COPYING.txt in this directory.
+
+This application loads the unmodified stockfish-18-lite-single.js and
+stockfish-18-lite-single.wasm files from the installed stockfish package.
+Vite publishes them as separate, cacheable assets in /build/assets/.
+
+Stockfish.js source code and build instructions:
+https://github.com/nmrugg/stockfish.js
+
+Stockfish 18 source code:
+https://github.com/official-stockfish/Stockfish/tree/sf_18

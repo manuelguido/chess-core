@@ -29,11 +29,13 @@ The rules of chess are handled by [`chess.js`](https://www.npmjs.com/package/che
 - current phase: lobby, playing, or over
 - bot-thinking state
 
-The computer opponent is implemented in `resources/js/stores/useChessStore.js`. It is a client-side heuristic minimax bot with alpha-beta pruning, material and center-control evaluation, and a temperature-based move picker. The strength slider maps to search depth, move randomness, simplicity bias, and occasional shallow searches so lower-strength play is less deterministic.
+The computer opponent is Stockfish 18 Lite, compiled to single-threaded WebAssembly by [`stockfish.js`](https://github.com/nmrugg/stockfish.js). Its approximately 7 MB engine runs in a dedicated worker behind a UCI controller. The lighter build keeps the initial download manageable and single-threading avoids requiring cross-origin isolation headers. It is loaded once in the lobby and stays warm across moves and rematches. Starting a game waits for engine readiness, so downloading or initializing the engine does not consume either player's clock.
 
-The ELO labels are UI tuning profiles, not measured ratings.
+Each move receives a `go movetime` search budget of 500–1000 ms, scaled with the selected strength (about 667 ms at the default 1600). The budget shrinks further under clock pressure. There are no extra artificial thinking delays. The interface stays responsive while Stockfish searches; the first download and initialization take additional time before the game starts. Actual response time also includes message delivery and device scheduling, so the budget is not a guaranteed end-to-end latency.
 
-The `stockfish` package is present in `package.json`, but the current store does not wire Stockfish into move selection. The active opponent is the custom minimax implementation described above.
+The strength slider defaults to 1600 and offers 800–3200 in steps of 100. The controller reads the engine's advertised `UCI_Elo` limits at startup (1320–3190 in the installed build). Within that range it uses Stockfish's native `UCI_LimitStrength` and `UCI_Elo` options. The 800–1300 settings are approximate beginner profiles: Stockfish evaluates several candidate moves and the controller selects among them with increasing preference for stronger moves as the slider rises. The 3200 setting disables strength limiting and uses the best move this build finds within its time budget. These labels are difficulty targets, not independently measured or guaranteed human ELO ratings; this Lite build is also not equivalent to an unrestricted full desktop Stockfish search.
+
+The store sends complete move history for repetition detection and validates the request ID, position and legality before applying any reply. Resetting or ending a game cancels pending work, and the controller drains a canceled search before starting another so late UCI results cannot enter a new game. A loading or search failure pauses the clocks and offers retry; it never substitutes a random move. Retry reloads the engine and resumes the same position.
 
 ## Project Shape
 
@@ -45,7 +47,13 @@ resources/js/Pages/Chess/Index.vue
     Top-level chess screen.
 
 resources/js/stores/useChessStore.js
-    Game state, move handling, clocks, history navigation, and bot logic.
+    Game state, move handling, clocks, history navigation, and worker lifecycle.
+
+resources/js/engine/stockfishController.js
+    UCI readiness, search serialization, cancellation, and strength settings.
+
+resources/js/workers/chessEngine.worker.js
+    Hosts the Stockfish WebAssembly worker off the UI thread.
 
 resources/js/components/Chess/
     Board, controls, sidebars, settings, clock, captured pieces, and panels.
@@ -54,18 +62,18 @@ resources/js/composables/useChessSound.js
     Procedural Web Audio sounds for moves and game events.
 
 tests/
-    Framework smoke tests; chess-specific coverage is not in place yet.
+    Framework smoke tests and JavaScript engine/game lifecycle regressions.
 ```
 
 ## Stack
 
-| Layer | Tools |
-| --- | --- |
-| Backend | Laravel 13, PHP 8.3+, Inertia Laravel |
-| Frontend | Vue 3, Pinia, Vite, Tailwind CSS 4 |
-| Chess | `chess.js`, custom minimax bot |
-| UI | lucide-vue-next |
-| Quality | PHPUnit, Laravel Pint, ESLint, Prettier |
+| Layer    | Tools                                                        |
+| -------- | ------------------------------------------------------------ |
+| Backend  | Laravel 13, PHP 8.3+, Inertia Laravel                        |
+| Frontend | Vue 3, Pinia, Vite, Tailwind CSS 4                           |
+| Chess    | `chess.js`, Stockfish 18 Lite WebAssembly                    |
+| UI       | lucide-vue-next                                              |
+| Quality  | PHPUnit, Node.js test runner, Laravel Pint, ESLint, Prettier |
 
 ## Local Setup
 
@@ -127,6 +135,7 @@ composer lint
 Run frontend checks and formatting:
 
 ```bash
+npm test
 npm run lint:check
 npm run format:check
 ```
@@ -152,9 +161,10 @@ Clock state is handled in the store with one interval. In timed games, the side 
 
 - There is no multiplayer mode.
 - Games are not persisted to the database.
-- The current bot is not a UCI engine integration.
 - Promotion always promotes to a queen.
-- Chess-specific tests for clock behavior, move review, and game lifecycle would be the next useful addition.
+- Bot strength depends on the device, Lite engine build and search budget; ELO labels remain uncalibrated.
+- The first engine download and initialization must finish before a game starts.
+- The displayed evaluation bar uses a lightweight material/position estimate, not Stockfish's search evaluation.
 
 ## Contributing
 
@@ -170,6 +180,7 @@ Before opening a pull request, run:
 
 ```bash
 composer test
+npm test
 npm run lint:check
 npm run format:check
 npm run build
@@ -177,4 +188,4 @@ npm run build
 
 ## License
 
-Chess Core is open-sourced under the MIT license. See `LICENSE` for details.
+Chess Core application code is open-sourced under the MIT license. See `LICENSE` for details. Stockfish is a separate GPL-3.0 engine; its [license](public/stockfish/COPYING.txt) and [source notice](public/stockfish/NOTICE.txt) are shipped in `public/stockfish/`. See the [Stockfish.js source repository](https://github.com/nmrugg/stockfish.js) for engine source and build instructions.

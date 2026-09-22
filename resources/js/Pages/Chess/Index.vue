@@ -1,5 +1,6 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
+import { onMounted } from 'vue';
 import { useChessStore } from '../../stores/useChessStore.js';
 import AppHeader from '../../components/Chess/AppHeader.vue';
 import AnalysisRail from '../../components/Chess/AnalysisRail.vue';
@@ -12,6 +13,7 @@ const props = defineProps({
 
 const chess = useChessStore();
 chess.botProfiles = props.botProfiles;
+onMounted(() => chess.prepareEngine());
 </script>
 
 <template>

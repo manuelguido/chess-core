@@ -4,7 +4,7 @@
  * player strip, and the in-game action bar.
  */
 import { computed } from 'vue';
-import { Flag, Radio, Undo2 } from 'lucide-vue-next';
+import { Flag, Radio, RefreshCw, Undo2 } from 'lucide-vue-next';
 import ChessBoard from './ChessBoard.vue';
 import PlayerStrip from './PlayerStrip.vue';
 import { useChessStore } from '../../stores/useChessStore.js';
@@ -33,11 +33,15 @@ const strip = (color) => {
         name: mine ? 'You' : (chess.activeProfile?.name ?? 'Engine'),
         role: mine ? '' : `ENGINE · ${chess.activeProfile?.style ?? ''}`,
         isEngine: !mine,
-        active: chess.gamePhase === 'playing' && chess.turn === color,
+        active:
+            chess.gamePhase === 'playing' &&
+            chess.engineReady &&
+            chess.turn === color,
         clock: mine ? chess.playerClock : chess.opponentClock,
         thinking: !mine && chess.botThinking,
         prompt:
             mine &&
+            chess.engineReady &&
             chess.gamePhase === 'playing' &&
             chess.isPlayerTurn &&
             !chess.botThinking &&
@@ -114,6 +118,15 @@ const statusText = computed(() =>
             </div>
 
             <div class="ml-auto flex flex-wrap gap-1.5">
+                <button
+                    v-if="chess.engineError"
+                    type="button"
+                    class="btn btn--quiet"
+                    @click="chess.retryEngine()"
+                >
+                    <RefreshCw class="h-3.5 w-3.5" :stroke-width="1.7" />
+                    Retry engine
+                </button>
                 <button
                     v-if="chess.isReviewing"
                     type="button"

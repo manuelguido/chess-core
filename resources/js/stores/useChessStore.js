@@ -107,6 +107,12 @@ export const useChessStore = defineStore('chess', () => {
     const selectedSquare = ref(null);
     const legalTargets = ref([]);
     const botThinking = ref(false);
+    const engineState = ref('idle'); // idle | loading | ready | error
+    const engineError = ref(null);
+    const engineReady = computed(() => engineState.value === 'ready');
+    const engineLoading = computed(
+        () => engineState.value === 'idle' || engineState.value === 'loading',
+    );
     const capturedWhite = ref([]);
     const capturedBlack = ref([]);
     const lastMove = ref(null);
@@ -158,7 +164,8 @@ export const useChessStore = defineStore('chess', () => {
         if (!timeControl.value) return;
         if (clockInterval) return;
         clockInterval = setInterval(() => {
-            if (gamePhase.value !== 'playing') return _stopClock();
+            if (gamePhase.value !== 'playing' || !engineReady.value)
+                return _stopClock();
             const turn = game.value.turn();
             clocks.value[turn] = Math.max(0, clocks.value[turn] - 1);
             if (clocks.value[turn] === 0) _timeOut(turn);
@@ -294,12 +301,16 @@ export const useChessStore = defineStore('chess', () => {
      * settle the draw, which is not what picking Random asked for.
      */
     const canStartByMoving = computed(
-        () => gamePhase.value === 'lobby' && colorPreference.value === 'w',
+        () =>
+            gamePhase.value === 'lobby' &&
+            colorPreference.value === 'w' &&
+            engineReady.value,
     );
 
     const canTakeback = computed(
         () =>
             gamePhase.value === 'playing' &&
+            engineReady.value &&
             !botThinking.value &&
             isPlayerTurn.value &&
             fullHistory.value.length >= 2,
@@ -307,6 +318,8 @@ export const useChessStore = defineStore('chess', () => {
 
     const status = computed(() => {
         positionFen.value;
+        if (engineError.value) return engineError.value;
+        if (engineLoading.value) return 'Loading engine…';
         if (gamePhase.value === 'lobby') return 'Not started';
         // Resignation and flag falls leave a perfectly playable position
         // behind, so they have to be reported before anything is read off
@@ -356,9 +369,8 @@ export const useChessStore = defineStore('chess', () => {
 
     /**
      * Static evaluation of the position on screen, in pawns, from white's
-     * point of view. This is the same heuristic the engine searches with —
-     * material, centre occupation and mobility — not a deep search, so treat
-     * it as a read on the position rather than an oracle.
+     * point of view. This lightweight material/centre/mobility readout is
+     * independent of Stockfish's deeper move search.
      */
     const positionEval = computed(() => {
         const fen = viewFen.value;
@@ -394,7 +406,10 @@ export const useChessStore = defineStore('chess', () => {
               : clocks.value[color];
         return {
             seconds,
-            active: gamePhase.value === 'playing' && turn.value === color,
+            active:
+                gamePhase.value === 'playing' &&
+                engineReady.value &&
+                turn.value === color,
             low: timed && seconds != null && seconds <= 30,
             fraction:
                 timed && seconds != null ? seconds / timeControl.value.base : 1,
@@ -544,25 +559,141 @@ export const useChessStore = defineStore('chess', () => {
     /* ================================================================== */
     /* SECTION G — Player / bot actions                                    */
     /* ================================================================== */
-    let botTimer = null;
     let botWorker = null;
+    let workerBootstrapUrl = null;
     let botWatchdog = null;
+    let engineLoadTimer = null;
     let botRequestId = 0;
+    let engineGameId = 0;
     let pendingBotRequest = null;
 
+    const _releaseWorkerBootstrap = () => {
+        if (workerBootstrapUrl) URL.revokeObjectURL(workerBootstrapUrl);
+        workerBootstrapUrl = null;
+    };
+
     const _cancelBotMove = () => {
-        if (botTimer !== null) clearTimeout(botTimer);
         if (botWatchdog !== null) clearTimeout(botWatchdog);
-        botTimer = null;
         botWatchdog = null;
+        pendingBotRequest = null;
+        botThinking.value = false;
+        // Keep the loaded WASM engine. It drains the stopped search before
+        // accepting a new position, so old bestmoves cannot leak into a game.
+        if (botWorker) {
+            try {
+                botWorker.postMessage({ type: 'cancel' });
+            } catch {
+                _failEngine();
+            }
+        }
+    };
+
+    const _failEngine = () => {
+        if (botWatchdog !== null) clearTimeout(botWatchdog);
+        if (engineLoadTimer !== null) clearTimeout(engineLoadTimer);
+        botWatchdog = null;
+        engineLoadTimer = null;
         pendingBotRequest = null;
         botWorker?.terminate();
         botWorker = null;
+        _releaseWorkerBootstrap();
         botThinking.value = false;
+        engineState.value = 'error';
+        engineError.value = 'Engine unavailable. Retry to continue.';
+        _stopClock();
+    };
+
+    const prepareEngine = () => {
+        if (botWorker || engineReady.value) return;
+        engineState.value = 'loading';
+        engineError.value = null;
+        try {
+            let worker;
+            if (import.meta.env?.DEV) {
+                // Laravel and Vite use different ports in development. A
+                // same-origin bootstrap can import Vite's module over CORS;
+                // a direct cross-origin Worker constructor is forbidden.
+                const entry = '../workers/chessEngine.worker.js';
+                const url = new URL(entry, import.meta.url).href;
+                workerBootstrapUrl = URL.createObjectURL(
+                    new Blob([`import ${JSON.stringify(url)};`], {
+                        type: 'application/javascript',
+                    }),
+                );
+                worker = new Worker(workerBootstrapUrl, { type: 'module' });
+            } else {
+                worker = new Worker(
+                    new URL(
+                        '../workers/chessEngine.worker.js',
+                        import.meta.url,
+                    ),
+                    { type: 'module' },
+                );
+            }
+            botWorker = worker;
+            engineLoadTimer = setTimeout(_failEngine, 15000);
+            worker.onmessage = ({ data }) => {
+                if (botWorker !== worker) return;
+                if (data?.type === 'ready') {
+                    _releaseWorkerBootstrap();
+                    if (engineLoadTimer !== null) clearTimeout(engineLoadTimer);
+                    engineLoadTimer = null;
+                    engineState.value = 'ready';
+                    engineError.value = null;
+                    if (gamePhase.value === 'playing') {
+                        _startClock();
+                        if (game.value.turn() !== playerColor.value)
+                            makeBotMove();
+                    }
+                    return;
+                }
+                if (data?.type === 'error' || data?.error) {
+                    console.error('Chess engine failed:', data.error);
+                    _failEngine();
+                    return;
+                }
+                const active = pendingBotRequest;
+                if (
+                    !active ||
+                    data?.id !== active.id ||
+                    data?.fen !== active.fen
+                )
+                    return;
+                if (data.type === 'searching') {
+                    clearTimeout(botWatchdog);
+                    botWatchdog = setTimeout(
+                        _failEngine,
+                        active.timeBudgetMs + 1000,
+                    );
+                } else {
+                    _finishBotMove(active, data.move);
+                }
+            };
+            const failed = (event) => {
+                if (botWorker === worker) {
+                    console.error('Chess engine worker failed:', event.message);
+                    _failEngine();
+                }
+            };
+            worker.onerror = failed;
+            worker.onmessageerror = failed;
+            worker.postMessage({ type: 'warmup' });
+        } catch (error) {
+            console.error('Chess engine could not start:', error);
+            _failEngine();
+        }
+    };
+
+    const retryEngine = () => {
+        if (engineState.value === 'error') prepareEngine();
     };
 
     onScopeDispose(() => {
         _cancelBotMove();
+        if (engineLoadTimer !== null) clearTimeout(engineLoadTimer);
+        botWorker?.terminate();
+        botWorker = null;
+        _releaseWorkerBootstrap();
         _stopClock();
     });
 
@@ -615,6 +746,7 @@ export const useChessStore = defineStore('chess', () => {
         // Ignore clicks while reviewing history, not playing, or game over
         if (
             isReviewing.value ||
+            !engineReady.value ||
             gamePhase.value !== 'playing' ||
             game.value.isGameOver()
         )
@@ -675,8 +807,7 @@ export const useChessStore = defineStore('chess', () => {
             _stopClock();
             return;
         }
-        botThinking.value = true;
-        botTimer = window.setTimeout(makeBotMove, botDelay());
+        makeBotMove();
     };
 
     /**
@@ -719,26 +850,23 @@ export const useChessStore = defineStore('chess', () => {
 
     const _finishBotMove = (request, candidate) => {
         if (!_isCurrentBotRequest(request)) return;
-        if (botWatchdog !== null) clearTimeout(botWatchdog);
-        botWatchdog = null;
-        pendingBotRequest = null;
-
-        // Validate against the live board. A worker failure gets one legal
-        // fallback, never a synchronous search on the interface thread.
-        const legalMoves = game.value.moves({ verbose: true });
-        const move =
-            legalMoves.find(
+        // A broken engine must be visible to the player, never silently
+        // replaced by an arbitrary move that destroys the selected strength.
+        const move = game.value
+            .moves({ verbose: true })
+            .find(
                 (legal) =>
                     legal.from === candidate?.from &&
                     legal.to === candidate?.to &&
                     legal.promotion === candidate?.promotion,
-            ) ?? legalMoves[0];
-        if (move) {
-            const played = game.value.move(move);
-            registerMove(played, 'bot');
-            syncBoard();
-        }
-        // Targets selected during thinking were only a premove preview.
+            );
+        if (!move) return _failEngine();
+        if (botWatchdog !== null) clearTimeout(botWatchdog);
+        botWatchdog = null;
+        pendingBotRequest = null;
+        const played = game.value.move(move);
+        registerMove(played, 'bot');
+        syncBoard();
         clearSelection();
         botThinking.value = false;
         if (game.value.isGameOver()) {
@@ -750,126 +878,52 @@ export const useChessStore = defineStore('chess', () => {
         _tryPremove();
     };
 
-    const _failBotRequest = (request) => {
-        if (!_isCurrentBotRequest(request)) return;
-        botWorker?.terminate();
-        botWorker = null;
-        _finishBotMove(request, null);
-    };
-
     const makeBotMove = () => {
-        botTimer = null;
         if (
             gamePhase.value !== 'playing' ||
             game.value.turn() === playerColor.value ||
             pendingBotRequest
         )
             return;
-
-        const request = {
-            id: ++botRequestId,
-            fen: game.value.fen(),
-        };
-        pendingBotRequest = request;
-        // Leave room for interaction even on slow devices, and hurry when
-        // the bot's clock is almost empty. ELO still controls target depth.
+        if (!engineReady.value) {
+            prepareEngine();
+            return;
+        }
+        // Strength and thinking time are independent. Keep normal searches
+        // between 500 and 1000ms, with a smaller allowance near flag fall.
+        const normalBudget = Math.max(
+            500,
+            Math.min(1000, Math.round(500 + ((elo.value - 800) / 2400) * 500)),
+        );
         const remaining = clocks.value[game.value.turn()];
         const timeBudgetMs = timeControl.value
-            ? Math.max(50, Math.min(750, remaining * 50))
-            : 750;
-
+            ? Math.max(50, Math.min(normalBudget, remaining * 50))
+            : normalBudget;
+        const request = {
+            id: ++botRequestId,
+            gameId: engineGameId,
+            fen: game.value.fen(),
+            moves: fullHistory.value.map(
+                (move) => move.from + move.to + (move.promotion ?? ''),
+            ),
+            elo: elo.value,
+            timeBudgetMs,
+        };
+        pendingBotRequest = request;
+        botThinking.value = true;
+        // Transport/stop-drain timeout. The actual search gets its own
+        // watchdog only after Stockfish confirms it has started.
+        botWatchdog = setTimeout(_failEngine, 2500);
         try {
-            if (!botWorker) {
-                const worker = new Worker(
-                    new URL(
-                        '../workers/chessEngine.worker.js',
-                        import.meta.url,
-                    ),
-                    { type: 'module' },
-                );
-                botWorker = worker;
-                worker.onmessage = ({ data }) => {
-                    const active = pendingBotRequest;
-                    if (
-                        botWorker !== worker ||
-                        !active ||
-                        data?.id !== active.id ||
-                        data?.fen !== active.fen
-                    )
-                        return;
-                    if (data.error) _failBotRequest(active);
-                    else _finishBotMove(active, data.move);
-                };
-                const failed = () => {
-                    if (botWorker === worker && pendingBotRequest)
-                        _failBotRequest(pendingBotRequest);
-                };
-                worker.onerror = failed;
-                worker.onmessageerror = failed;
-            }
-            // Also recover if loading or running the worker never completes.
-            botWatchdog = setTimeout(
-                () => _failBotRequest(request),
-                timeBudgetMs + 1500,
-            );
-            botWorker.postMessage({
-                ...request,
-                moves: fullHistory.value.map(
-                    (move) => move.from + move.to + (move.promotion ?? ''),
-                ),
-                elo: elo.value,
-                timeBudgetMs,
-            });
+            botWorker.postMessage(request);
         } catch {
-            _failBotRequest(request);
+            _failEngine();
         }
     };
 
     /* ================================================================== */
-    /* SECTION H — Bot AI                                                  */
+    /* SECTION H — Position display                                       */
     /* ================================================================== */
-
-    /**
-     * Human-like delay with four contributing factors:
-     *  1. Base think time  — weaker bots are more hesitant / slower
-     *  2. Complexity bonus — more legal moves in position → longer think (choice paralysis)
-     *  3. Recapture speed  — if the player just captured, bot often replies fast (~65% of time)
-     *  4. Long-think spike — ~8% chance of a longer pause (re-evaluating the position)
-     *  5. Clock pressure   — timed game with < 30 s left → bot hurries
-     */
-    const botDelay = () => {
-        const moveCount = game.value.moves().length;
-
-        // Base: weaker bots think longer (more confused), stronger bots are quicker
-        const base = Math.max(250, 850 - Math.floor(elo.value / 4));
-
-        // Position complexity: paralysis of choice
-        const complexityBonus = Math.min(350, moveCount * 7);
-
-        // Recapture instinct: respond quickly after the player takes a piece
-        const justCaptured =
-            lastPlayedMove.value?.flags?.includes('c') ||
-            lastPlayedMove.value?.flags?.includes('e');
-        const recaptureRatio =
-            justCaptured && Math.random() < 0.65 ? 0.35 : 1.0;
-
-        // Rare long think: re-evaluating a critical position
-        const spike = Math.random() < 0.08 ? 1400 + Math.random() * 2200 : 0;
-
-        // Natural variance
-        const variance = Math.random() * 450;
-
-        // Clock pressure: hurry when low on time
-        const botColor = playerColor.value === 'w' ? 'b' : 'w';
-        const clockRatio =
-            timeControl.value && clocks.value[botColor] < 30 ? 0.4 : 1.0;
-
-        const total =
-            (base + complexityBonus + variance + spike) *
-            recaptureRatio *
-            clockRatio;
-        return Math.max(180, Math.min(1200, total));
-    };
 
     /**
      * Static evaluation in centipawns, positive = better for white.
@@ -901,15 +955,9 @@ export const useChessStore = defineStore('chess', () => {
     /* SECTION I — Game lifecycle                                          */
     /* ================================================================== */
 
-    const _triggerBotFirst = () => {
-        botThinking.value = true;
-        botTimer = window.setTimeout(() => {
-            makeBotMove();
-        }, botDelay());
-    };
-
     const _resetBoard = () => {
         _cancelBotMove();
+        engineGameId++;
         _stopClock();
         game.value = new Chess();
         board.value = game.value.board();
@@ -941,6 +989,10 @@ export const useChessStore = defineStore('chess', () => {
      */
     const startGame = () => {
         if (gamePhase.value !== 'lobby') return;
+        if (!engineReady.value) {
+            prepareEngine();
+            return;
+        }
         // Reset board in case a previous game finished without newGame()
         _resetBoard();
         // Settle 'random' now, so the rest of the game has a concrete side.
@@ -960,7 +1012,7 @@ export const useChessStore = defineStore('chess', () => {
         gamePhase.value = 'playing';
         moveFeedback.value = 'Game started';
         _startClock();
-        if (playerColor.value === 'b') _triggerBotFirst();
+        if (playerColor.value === 'b') makeBotMove();
     };
 
     /** Resign ends the current game, puts into 'over' state. */
@@ -1035,6 +1087,9 @@ export const useChessStore = defineStore('chess', () => {
         selectedSquare,
         legalTargets,
         botThinking,
+        engineReady,
+        engineLoading,
+        engineError,
         capturedWhite,
         capturedBlack,
         lastMove,
@@ -1081,7 +1136,8 @@ export const useChessStore = defineStore('chess', () => {
         clearSelection,
         premove,
         clearPremove,
-        botDelay,
+        prepareEngine,
+        retryEngine,
         newGame,
         startGame,
         resign,

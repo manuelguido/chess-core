@@ -101,6 +101,7 @@ const setElo = (event) => {
                     min="800"
                     max="3200"
                     step="100"
+                    title="Estimated playing strength; 3200 uses maximum strength"
                     :value="chess.elo"
                     :aria-valuetext="`${chess.elo} ELO`"
                     :disabled="chess.configLocked"
@@ -195,10 +196,11 @@ const setElo = (event) => {
                 v-if="chess.gamePhase === 'lobby'"
                 type="button"
                 class="btn btn--primary"
+                :disabled="!chess.engineReady"
                 @click="chess.startGame()"
             >
                 <Play class="h-3.5 w-3.5" :stroke-width="1.8" />
-                Start
+                {{ chess.engineLoading ? 'Loading engine…' : 'Start' }}
             </button>
             <button
                 v-else

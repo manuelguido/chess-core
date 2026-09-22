@@ -340,7 +340,7 @@ const onSquareClick = (tile) => {
 <template>
     <div
         ref="boardEl"
-        class="board w-full xl:h-full xl:w-auto"
+        class="board w-full"
         role="grid"
         aria-label="Chess board"
     >
@@ -417,9 +417,8 @@ const onSquareClick = (tile) => {
     </div>
 
     <!--
-        Teleported to <body> on purpose: the board sits inside a translated
-        ancestor at xl, which would otherwise become the containing block for
-        a position:fixed layer and throw off the viewport coordinates.
+        Keep the dragged piece in viewport coordinates, independent of the
+        board layout and any ancestor transforms.
     -->
     <Teleport to="body">
         <div

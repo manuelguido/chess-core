@@ -7,7 +7,6 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { Copy } from 'lucide-vue-next';
 import ChessPiece from '../ChessPiece.vue';
-import PlayerClockCard from './PlayerClockCard.vue';
 import { useChessStore } from '../../stores/useChessStore.js';
 
 const chess = useChessStore();
@@ -81,20 +80,6 @@ watch(
 
 <template>
     <aside class="rail">
-        <!--
-            The engine always takes the top card and you the bottom one,
-            independent of board orientation — your clock should not move
-            when you flip the board.
-        -->
-        <PlayerClockCard
-            edge="top"
-            is-engine
-            :name="chess.activeProfile?.name ?? 'Engine'"
-            :thinking="chess.botThinking"
-            v-bind="chess.opponentClock"
-        />
-
-        <!-- Scrolls between the two cards so both clocks stay pinned. -->
         <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div class="flex shrink-0 gap-px border-b border-line px-3.5">
                 <button
@@ -293,17 +278,5 @@ watch(
                 </p>
             </div>
         </div>
-
-        <PlayerClockCard
-            edge="bottom"
-            name="You"
-            :prompt="
-                chess.gamePhase === 'playing' &&
-                chess.isPlayerTurn &&
-                !chess.botThinking &&
-                !chess.isReviewing
-            "
-            v-bind="chess.playerClock"
-        />
     </aside>
 </template>

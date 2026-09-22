@@ -653,48 +653,55 @@
     }
 
     /* ---------------------------------------------------------------- */
-    /* Player clock cards — bookend the analysis rail                    */
+    /* Player clocks — aligned to the board's right edge                 */
     /* ---------------------------------------------------------------- */
     .player-card {
         position: relative;
         display: flex;
         flex: 0 0 auto;
         align-items: center;
-        gap: 12px;
+        justify-content: flex-end;
+        width: 120px;
+        height: 52px;
         overflow: hidden;
+        border: 1px solid var(--color-line-strong);
+        border-radius: var(--radius-md);
         background: var(--color-bg-panel);
-        padding: 15px 16px 17px;
+        padding: 0 10px 3px;
         /* The left edge is the "on the clock" tell; transparent keeps the
            box-shadow transition from jumping when it lights up. */
         box-shadow: inset 3px 0 0 transparent;
         transition:
             background-color 250ms ease,
+            border-color 250ms ease,
             box-shadow 250ms ease;
     }
 
     .player-card[data-active='true'] {
-        background: #12171e;
+        border-color: var(--color-accent-edge);
+        background: var(--color-accent-wash);
         box-shadow: inset 3px 0 0 var(--color-accent);
     }
 
     .player-card[data-active='true'][data-low='true'] {
+        border-color: var(--color-line-danger);
         box-shadow: inset 3px 0 0 var(--color-danger);
         animation: low-time-edge 1s ease-in-out infinite;
     }
 
     .player-card__clock {
-        color: var(--color-ink-faint);
-        font-size: 34px;
-        font-weight: 500;
+        color: var(--color-ink-muted);
+        font-size: 36px;
+        font-weight: 600;
         font-variant-numeric: tabular-nums;
         letter-spacing: -0.01em;
         line-height: 1;
+        text-align: right;
         transition: color 250ms ease;
     }
 
     .player-card[data-active='true'] .player-card__clock {
-        color: #f5f7fa;
-        font-weight: 600;
+        color: var(--color-ink-bright);
     }
 
     .player-card[data-low='true'] .player-card__clock {
@@ -721,6 +728,16 @@
 
     .player-card[data-low='true'] .player-card__bar {
         background: var(--color-danger);
+    }
+
+    @media (min-width: 640px) {
+        .player-card {
+            width: 136px;
+        }
+
+        .player-card__clock {
+            font-size: 40px;
+        }
     }
 }
 

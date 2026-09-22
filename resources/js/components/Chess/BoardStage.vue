@@ -34,6 +34,14 @@ const strip = (color) => {
         role: mine ? '' : `ENGINE · ${chess.activeProfile?.style ?? ''}`,
         isEngine: !mine,
         active: chess.gamePhase === 'playing' && chess.turn === color,
+        clock: mine ? chess.playerClock : chess.opponentClock,
+        thinking: !mine && chess.botThinking,
+        prompt:
+            mine &&
+            chess.gamePhase === 'playing' &&
+            chess.isPlayerTurn &&
+            !chess.botThinking &&
+            !chess.isReviewing,
         captured: taken.map((type) => ({ color: takenColor, type })),
         advantage: ahead ? Math.abs(balance) : null,
     };
@@ -57,53 +65,39 @@ const statusText = computed(() =>
 </script>
 
 <template>
-    <!--
-        Below xl the board is width-driven and the page scrolls.
-
-        At xl the board must be driven by the *height* left over in the
-        column, or a short viewport would push the shell into scrolling.
-        That cannot be done with plain flex — a height-driven square inside
-        a shrink-to-fit column makes width depend on itself. So the board
-        row becomes a positioning context and the board is taken out of
-        flow, where `height:100%` + `aspect-ratio` resolves cleanly. The
-        stage's own max-width mirrors the same arithmetic so the strips line
-        up with the board edges; if it is ever off, the board stays square
-        and merely sits a little narrower than the strips.
-    -->
+    <!-- The board frame extends 10px beyond the squares; extend both player
+         rows by the same amount to align the clocks with that visible edge.
+         Width drives the square; the desktop height cap
+         reserves space for the header, two clocks, and game actions. -->
     <div
-        class="flex w-full max-w-[min(76vh,100%)] flex-col gap-2.5 xl:h-full xl:max-w-[calc(100dvh-220px)]"
+        class="grid w-full max-w-[min(76vh,100%)] grid-cols-[11px_minmax(0,1fr)] content-start gap-2.5 xl:max-w-[calc(100dvh-236px)]"
     >
-        <PlayerStrip v-bind="topStrip" />
+        <PlayerStrip class="col-start-2 -mr-2.5" v-bind="topStrip" />
 
-        <div class="min-h-0 xl:relative xl:flex-1">
+        <!-- Eval bar: white's share of the static evaluation -->
+        <div
+            class="relative col-start-1 row-start-2 overflow-hidden rounded-xs border border-[#1C232B] bg-bg-hover"
+            :title="`Evaluation ${chess.positionEval > 0 ? '+' : ''}${chess.positionEval}`"
+        >
             <div
-                class="flex items-stretch gap-2.5 xl:absolute xl:inset-y-0 xl:left-1/2 xl:-translate-x-1/2"
-            >
-                <!-- Eval bar: white's share of the static evaluation -->
-                <div
-                    class="relative w-[11px] shrink-0 overflow-hidden rounded-xs border border-[#1C232B] bg-bg-hover"
-                    :title="`Evaluation ${chess.positionEval > 0 ? '+' : ''}${chess.positionEval}`"
-                >
-                    <div
-                        class="absolute inset-x-0 bottom-0 bg-[#E4E7EB] transition-[height] duration-350 ease-out"
-                        :style="{ height: `${chess.evalPercent}%` }"
-                    />
-                    <div
-                        class="absolute inset-x-0 top-1/4 h-px bg-white/[0.07]"
-                    />
-                    <div class="absolute inset-x-0 top-1/2 h-px bg-accent/55" />
-                    <div
-                        class="absolute inset-x-0 top-3/4 h-px bg-white/[0.07]"
-                    />
-                </div>
-
-                <ChessBoard />
-            </div>
+                class="absolute inset-x-0 bottom-0 bg-[#E4E7EB] transition-[height] duration-350 ease-out"
+                :style="{ height: `${chess.evalPercent}%` }"
+            />
+            <div class="absolute inset-x-0 top-1/4 h-px bg-white/[0.07]" />
+            <div class="absolute inset-x-0 top-1/2 h-px bg-accent/55" />
+            <div class="absolute inset-x-0 top-3/4 h-px bg-white/[0.07]" />
         </div>
 
-        <PlayerStrip v-bind="bottomStrip" />
+        <div class="col-start-2 row-start-2 min-w-0">
+            <ChessBoard />
+        </div>
 
-        <div class="mt-0.5 flex flex-wrap items-center gap-2">
+        <PlayerStrip
+            class="col-start-2 row-start-3 -mr-2.5"
+            v-bind="bottomStrip"
+        />
+
+        <div class="col-span-2 mt-0.5 flex flex-wrap items-center gap-2">
             <div
                 class="flex min-w-0 flex-auto items-center gap-2 rounded-md border px-2.5 py-1.5 whitespace-nowrap"
                 :class="

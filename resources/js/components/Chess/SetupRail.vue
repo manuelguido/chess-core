@@ -7,13 +7,7 @@
  * assistance toggles stay live because they only change what is drawn.
  */
 import { computed } from 'vue';
-import {
-    FlipVertical2,
-    Play,
-    RefreshCw,
-    RotateCcw,
-    UserRound,
-} from 'lucide-vue-next';
+import { FlipVertical2, Play, RefreshCw, RotateCcw } from 'lucide-vue-next';
 import ChessPiece from '../ChessPiece.vue';
 import { useChessStore } from '../../stores/useChessStore.js';
 
@@ -37,15 +31,6 @@ const ASSISTANCE = [
     { key: 'showCoords', label: 'Board coordinates' },
 ];
 
-/** Engine ladder — one rung per bot profile the server sent. */
-const ladder = computed(() =>
-    [...chess.botProfiles].sort((a, b) => a.elo - b.elo),
-);
-
-const activeRung = computed(() =>
-    ladder.value.findIndex((p) => p.elo === chess.activeProfile?.elo),
-);
-
 const isTimeActive = (preset) =>
     !!chess.timeControl &&
     chess.timeControl.base === preset.base &&
@@ -57,15 +42,9 @@ const phaseBadge = computed(() => {
     return 'READY';
 });
 
-const cycleOpponent = () => {
+const setElo = (event) => {
     if (chess.configLocked) return;
-    const next = (activeRung.value + 1) % ladder.value.length;
-    chess.elo = ladder.value[next].elo;
-};
-
-const selectRung = (index) => {
-    if (chess.configLocked) return;
-    chess.elo = ladder.value[index].elo;
+    chess.elo = Number(event.target.value);
 };
 </script>
 
@@ -85,18 +64,7 @@ const selectRung = (index) => {
 
         <!-- Opponent ------------------------------------------------- -->
         <div class="rail-section">
-            <div class="mb-3 flex items-center justify-between gap-2">
-                <span class="eyebrow">Opponent</span>
-                <button
-                    type="button"
-                    class="btn btn--tiny"
-                    :disabled="chess.configLocked"
-                    @click="cycleOpponent"
-                >
-                    <UserRound class="h-2.5 w-2.5" :stroke-width="1.6" />
-                    CHANGE
-                </button>
-            </div>
+            <div class="eyebrow mb-3">Opponent</div>
 
             <div class="flex items-center gap-3">
                 <div
@@ -108,17 +76,45 @@ const selectRung = (index) => {
                     <div class="truncate text-sm font-semibold">
                         {{ chess.activeProfile?.name }}
                     </div>
-                    <div class="num mt-0.5 text-[11.5px] text-ink-soft">
-                        {{ chess.elo }} ELO
-                    </div>
-                </div>
-                <div class="ml-auto shrink-0 text-right">
-                    <div class="text-[11px] font-medium text-ink-mild">
+                    <div class="mt-0.5 text-[11.5px] text-ink-soft">
                         {{ chess.activeProfile?.style }}
                     </div>
-                    <div class="num mt-1 text-[10.5px] text-ink-fainter">
-                        Depth {{ chess.activeProfile?.depth }}
-                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <div class="flex items-baseline justify-between gap-2">
+                    <label for="engine-elo" class="text-[11px] text-ink-soft">
+                        Engine strength
+                    </label>
+                    <output
+                        for="engine-elo"
+                        class="num text-[12px] font-semibold text-accent"
+                    >
+                        {{ chess.elo }} ELO
+                    </output>
+                </div>
+                <input
+                    id="engine-elo"
+                    class="elo-slider"
+                    type="range"
+                    min="800"
+                    max="3200"
+                    step="100"
+                    :value="chess.elo"
+                    :aria-valuetext="`${chess.elo} ELO`"
+                    :disabled="chess.configLocked"
+                    :style="{
+                        '--elo-progress': `${((chess.elo - 800) / 2400) * 100}%`,
+                    }"
+                    @input="setElo"
+                />
+                <div
+                    class="num flex justify-between text-[10px] text-ink-fainter"
+                    aria-hidden="true"
+                >
+                    <span>800</span>
+                    <span>3200</span>
                 </div>
             </div>
         </div>
@@ -170,44 +166,6 @@ const selectRung = (index) => {
                     >
                         {{ option.label }}
                     </button>
-                </div>
-            </div>
-
-            <div>
-                <div class="mb-2 flex items-baseline justify-between">
-                    <span class="text-[11px] text-ink-soft">
-                        Engine strength
-                    </span>
-                    <span class="num text-[11px] text-ink-mild">
-                        LV {{ activeRung + 1 }} · {{ chess.elo }}
-                    </span>
-                </div>
-                <div
-                    class="grid gap-[3px]"
-                    :style="{
-                        gridTemplateColumns: `repeat(${ladder.length}, minmax(0, 1fr))`,
-                    }"
-                >
-                    <button
-                        v-for="(profile, index) in ladder"
-                        :key="profile.elo"
-                        type="button"
-                        class="h-5 rounded-xs transition-colors duration-150 disabled:cursor-not-allowed"
-                        :class="
-                            index <= activeRung
-                                ? 'bg-accent hover:bg-accent-hover'
-                                : 'bg-[#1B222A] hover:bg-line-strong'
-                        "
-                        :style="
-                            index <= activeRung
-                                ? { opacity: 0.55 + index * 0.09 }
-                                : null
-                        "
-                        :disabled="chess.configLocked"
-                        :title="`${profile.name} — ${profile.elo} ELO`"
-                        :aria-label="`${profile.name}, ${profile.elo} ELO`"
-                        @click="selectRung(index)"
-                    />
                 </div>
             </div>
         </div>
@@ -274,3 +232,61 @@ const selectRung = (index) => {
         </div>
     </aside>
 </template>
+
+<style scoped>
+.elo-slider {
+    display: block;
+    width: 100%;
+    height: 36px;
+    margin: 0;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.elo-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        var(--color-accent) var(--elo-progress),
+        var(--color-bg-strong) var(--elo-progress)
+    );
+}
+
+.elo-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        var(--color-accent) var(--elo-progress),
+        var(--color-bg-strong) var(--elo-progress)
+    );
+}
+
+.elo-slider::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+    margin-top: -6px;
+    appearance: none;
+    border: 2px solid var(--color-bg-panel);
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-edge);
+}
+
+.elo-slider::-moz-range-thumb {
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--color-bg-panel);
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-edge);
+}
+
+.elo-slider:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+</style>

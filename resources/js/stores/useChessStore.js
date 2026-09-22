@@ -60,7 +60,7 @@ export const useChessStore = defineStore('chess', () => {
     /** 'lobby' | 'playing' | 'over' */
     const gamePhase = ref('lobby');
 
-    const elo = ref(1200);
+    const elo = ref(1600);
     const playerColor = ref('w');
 
     /**

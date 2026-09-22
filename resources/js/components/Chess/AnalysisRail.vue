@@ -90,7 +90,6 @@ watch(
             edge="top"
             is-engine
             :name="chess.activeProfile?.name ?? 'Engine'"
-            :rating="chess.elo"
             :thinking="chess.botThinking"
             v-bind="chess.opponentClock"
         />

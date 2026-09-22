@@ -32,7 +32,6 @@ const strip = (color) => {
     return {
         name: mine ? 'You' : (chess.activeProfile?.name ?? 'Engine'),
         role: mine ? '' : `ENGINE · ${chess.activeProfile?.style ?? ''}`,
-        rating: mine ? null : chess.elo,
         isEngine: !mine,
         active: chess.gamePhase === 'playing' && chess.turn === color,
         captured: taken.map((type) => ({ color: takenColor, type })),

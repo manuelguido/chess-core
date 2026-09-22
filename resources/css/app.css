@@ -52,10 +52,16 @@
 
     --color-danger: #d2705c;
     --color-positive: #6e9a6b;
+    --color-premove: #7fa8c9;
 
     /* Board — graphite */
     --color-square-light: #7e8b99;
     --color-square-dark: #3d4652;
+
+    --radius-xs: 3px;
+    --radius-sm: 5px;
+    --radius-md: 7px;
+    --radius-lg: 9px;
 
     --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
     --ease-emphasis: cubic-bezier(0.2, 0.75, 0.3, 1);
@@ -120,7 +126,7 @@
     ::-webkit-scrollbar-thumb {
         background: #222a33;
         border: 2px solid transparent;
-        border-radius: 6px;
+        border-radius: 999px;
         background-clip: padding-box;
     }
 
@@ -174,7 +180,7 @@
 
     .tile {
         border: 1px solid #171d25;
-        border-radius: 6px;
+        border-radius: var(--radius-md);
         background: var(--color-bg-raised);
     }
 
@@ -187,7 +193,7 @@
         justify-content: center;
         gap: 8px;
         border: 1px solid var(--color-line-strong);
-        border-radius: 7px;
+        border-radius: var(--radius-md);
         background: transparent;
         color: var(--color-ink-muted);
         font-size: 11.5px;
@@ -239,6 +245,8 @@
     }
 
     .btn--tiny {
+        /* Steps down from .btn: 7px is too round on a chip this short. */
+        border-radius: var(--radius-sm);
         font-size: 10.5px;
         letter-spacing: 0.06em;
         padding: 5px 8px;
@@ -251,7 +259,7 @@
         gap: 1px;
         overflow: hidden;
         border: 1px solid var(--color-line-strong);
-        border-radius: 7px;
+        border-radius: var(--radius-md);
         background: var(--color-line-strong);
     }
 
@@ -315,7 +323,7 @@
         align-items: center;
         gap: 6px;
         border: 1px solid var(--color-line);
-        border-radius: 5px;
+        border-radius: var(--radius-sm);
         background: var(--color-bg-raised);
         color: var(--color-ink-soft);
         font-size: 10.5px;
@@ -344,7 +352,8 @@
         flex: 0 0 auto;
         align-items: center;
         border: 1px solid #252d37;
-        border-radius: 9px;
+        /* A pill: half of the 18px track height, not a stray scale value. */
+        border-radius: 999px;
         background: #1b222a;
         padding: 2px;
         transition:
@@ -390,7 +399,7 @@
         aspect-ratio: 1 / 1;
         container-type: inline-size;
         overflow: hidden;
-        border-radius: 5px;
+        border-radius: var(--radius-sm);
         box-shadow: var(--shadow-board);
     }
 
@@ -416,6 +425,17 @@
         cursor: pointer;
     }
 
+    .square--grab {
+        cursor: grab;
+        /* Only pickable squares swallow touch gestures, so below xl the page
+           can still be scrolled by dragging anywhere else on the board. */
+        touch-action: none;
+    }
+
+    .square--dragging {
+        cursor: grabbing;
+    }
+
     .square--playable:hover::before {
         content: '';
         position: absolute;
@@ -439,6 +459,15 @@
     .square__wash--selected {
         background: rgba(211, 162, 74, 0.3);
         box-shadow: inset 0 0 0 2px var(--color-accent);
+    }
+
+    .square__wash--premove {
+        background: rgba(127, 168, 201, 0.26);
+        box-shadow: inset 0 0 0 1px rgba(127, 168, 201, 0.45);
+    }
+
+    .square__wash--drop {
+        box-shadow: inset 0 0 0 3px var(--color-accent);
     }
 
     .square__wash--check {
@@ -521,6 +550,27 @@
     .piece--moving {
         z-index: 3;
         animation: piece-slide 200ms var(--ease-emphasis) both;
+    }
+
+    /* The piece left behind on the origin square while it is being dragged. */
+    .piece--ghost {
+        opacity: 0.25;
+    }
+
+    /* Follows the pointer; teleported to <body>, see ChessBoard.vue. */
+    .drag-layer {
+        position: fixed;
+        z-index: 60;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+
+    .drag-layer .piece {
+        transform: scale(1.12);
+        filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.6));
     }
 
     /* ---------------------------------------------------------------- */

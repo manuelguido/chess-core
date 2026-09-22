@@ -25,7 +25,7 @@ const phase = computed(() => {
             <img
                 :src="logoUrl"
                 alt=""
-                class="h-[29px] w-[29px] rounded-lg border border-line-strong bg-bg-hover object-contain p-0.5"
+                class="h-[29px] w-[29px] rounded-md border border-line-strong bg-bg-hover object-contain p-0.5"
             />
             <div class="flex flex-col gap-0.5">
                 <span

@@ -143,7 +143,7 @@ watch(
                     class="flex shrink-0 items-center gap-2.5 border-b border-line-soft px-3.5 py-2.5"
                 >
                     <span
-                        class="shrink-0 rounded border border-accent-edge px-1.5 py-1 text-[9.5px] font-semibold tracking-[0.08em] text-accent"
+                        class="shrink-0 rounded-sm border border-accent-edge px-1.5 py-1 text-[9.5px] font-semibold tracking-[0.08em] text-accent"
                     >
                         {{ chess.opening.eco }}
                     </span>

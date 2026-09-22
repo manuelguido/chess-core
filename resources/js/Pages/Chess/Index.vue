@@ -22,6 +22,9 @@ chess.botProfiles = props.botProfiles;
         shell that never scrolls the page — the rails scroll internally.
         Below xl it degrades to a single scrolling column with the board
         first, since a 268px rail plus a board does not fit side by side.
+        The analysis rail comes second there so the clocks — which now live
+        in that rail — stay just under the board instead of below a screen
+        of setup controls.
     -->
     <div
         class="flex min-h-screen flex-col bg-bg-base text-ink xl:h-screen xl:overflow-hidden"
@@ -32,7 +35,7 @@ chess.botProfiles = props.botProfiles;
             class="flex flex-1 flex-col xl:grid xl:min-h-0 xl:grid-cols-[268px_minmax(0,1fr)_356px]"
         >
             <SetupRail
-                class="order-2 border-t border-line xl:order-1 xl:overflow-y-auto xl:border-t-0 xl:border-r"
+                class="order-3 border-t border-line xl:order-1 xl:overflow-y-auto xl:border-t-0 xl:border-r"
             />
 
             <main
@@ -42,7 +45,7 @@ chess.botProfiles = props.botProfiles;
             </main>
 
             <AnalysisRail
-                class="order-3 border-t border-line xl:min-h-0 xl:overflow-hidden xl:border-t-0 xl:border-l"
+                class="order-2 border-t border-line xl:order-3 xl:min-h-0 xl:overflow-hidden xl:border-t-0 xl:border-l"
             />
         </div>
     </div>

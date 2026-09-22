@@ -51,12 +51,6 @@ const isTimeActive = (preset) =>
     chess.timeControl.base === preset.base &&
     chess.timeControl.increment === preset.increment;
 
-const timeLabel = computed(() => {
-    if (!chess.timeControl) return 'Untimed';
-    const minutes = Math.floor(chess.timeControl.base / 60);
-    return `${minutes}+${chess.timeControl.increment}`;
-});
-
 const phaseBadge = computed(() => {
     if (chess.gamePhase === 'playing') return 'LIVE';
     if (chess.gamePhase === 'over') return 'FINISHED';
@@ -106,7 +100,7 @@ const selectRung = (index) => {
 
             <div class="flex items-center gap-3">
                 <div
-                    class="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[9px] border border-line-strong bg-bg-raised"
+                    class="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md border border-line-strong bg-bg-raised"
                 >
                     <ChessPiece class="h-6 w-6 opacity-70" color="b" type="n" />
                 </div>
@@ -198,7 +192,7 @@ const selectRung = (index) => {
                         v-for="(profile, index) in ladder"
                         :key="profile.elo"
                         type="button"
-                        class="h-5 rounded-[3px] transition-colors duration-150 disabled:cursor-not-allowed"
+                        class="h-5 rounded-xs transition-colors duration-150 disabled:cursor-not-allowed"
                         :class="
                             index <= activeRung
                                 ? 'bg-accent hover:bg-accent-hover'
@@ -246,7 +240,7 @@ const selectRung = (index) => {
                 @click="chess.startGame()"
             >
                 <Play class="h-3.5 w-3.5" :stroke-width="1.8" />
-                Start session · {{ timeLabel }}
+                Start
             </button>
             <button
                 v-else
@@ -255,7 +249,7 @@ const selectRung = (index) => {
                 @click="chess.newGame()"
             >
                 <RotateCcw class="h-3.5 w-3.5" :stroke-width="1.8" />
-                New session
+                New game
             </button>
 
             <div class="grid grid-cols-2 gap-2">

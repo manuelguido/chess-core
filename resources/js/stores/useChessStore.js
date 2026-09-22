@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { computed, ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import { Chess } from 'chess.js';
 import { useChessSound } from '../composables/useChessSound.js';
 
@@ -171,6 +171,22 @@ export const useChessStore = defineStore('chess', () => {
      */
     const lastPlayedMove = ref(null);
 
+    /**
+     * A move queued while the engine is thinking: { from, to }. It is fired
+     * the instant the engine replies, and silently dropped if the reply makes
+     * it illegal. Only one is held at a time, as on every other chess site.
+     */
+    const premove = ref(null);
+
+    const clearPremove = () => {
+        premove.value = null;
+    };
+
+    /** Any exit from 'playing' — mate, resignation, flag — voids the queue. */
+    watch(gamePhase, (phase) => {
+        if (phase !== 'playing') premove.value = null;
+    });
+
     /* ================================================================== */
     /* SECTION C — Clock state                                             */
     /* ================================================================== */
@@ -309,6 +325,15 @@ export const useChessStore = defineStore('chess', () => {
         positionFen.value;
         return game.value.isCheckmate();
     });
+
+    /**
+     * White moves first, so only White can open a session with a board click.
+     * 'random' is excluded on purpose: clicking a white piece would quietly
+     * settle the draw, which is not what picking Random asked for.
+     */
+    const canStartByMoving = computed(
+        () => gamePhase.value === 'lobby' && colorPreference.value === 'w',
+    );
 
     const canTakeback = computed(
         () =>
@@ -558,16 +583,67 @@ export const useChessStore = defineStore('chess', () => {
     /* ================================================================== */
     let botTimer = null;
 
+    /**
+     * Squares a piece could move to if it were already your turn.
+     *
+     * Derived by reloading the position with the side-to-move flipped, which
+     * lets chess.js do the work. It is an approximation on purpose: it cannot
+     * know what the engine is about to play, so a premove that only opens up
+     * *because* of the engine's reply (sliding through a square it is about to
+     * vacate, say) is not offered. Anything queued is re-checked for real
+     * before it is played, so a wrong guess is discarded, never played.
+     */
+    const premoveTargets = (square) => {
+        const parts = game.value.fen().split(' ');
+        parts[1] = playerColor.value;
+        parts[3] = '-'; // en passant depends on the reply; never premove it
+        try {
+            const probe = new Chess();
+            probe.load(parts.join(' '), { skipValidation: true });
+            return probe.moves({ square, verbose: true }).map((m) => m.to);
+        } catch {
+            return [];
+        }
+    };
+
+    /** Click/drop handling while the engine is on move: queue, don't play. */
+    const _selectForPremove = (tile) => {
+        if (tile.piece?.color === playerColor.value) {
+            selectedSquare.value = tile.square;
+            legalTargets.value = premoveTargets(tile.square);
+            return;
+        }
+        if (selectedSquare.value && legalTargets.value.includes(tile.square)) {
+            premove.value = { from: selectedSquare.value, to: tile.square };
+            clearSelection();
+            return;
+        }
+        // Anywhere else cancels both the pick-up and any queued premove.
+        clearSelection();
+        clearPremove();
+    };
+
     const selectSquare = (tile) => {
-        // Ignore clicks while reviewing history, not playing, bot thinking, or game over
+        // Picking up a white piece in the lobby starts the session, so the
+        // first move doubles as "begin". Falls through to the normal path
+        // below, which now passes, so the piece is selected in the same click.
+        if (canStartByMoving.value && tile.piece?.color === 'w') startGame();
+
+        // Ignore clicks while reviewing history, not playing, or game over
         if (
             isReviewing.value ||
             gamePhase.value !== 'playing' ||
-            botThinking.value ||
-            game.value.isGameOver() ||
-            game.value.turn() !== playerColor.value
+            game.value.isGameOver()
         )
             return;
+
+        // Not your turn — the click queues a premove instead of moving.
+        if (game.value.turn() !== playerColor.value) {
+            _selectForPremove(tile);
+            return;
+        }
+
+        if (botThinking.value) return;
 
         if (tile.piece?.color === playerColor.value) {
             selectedSquare.value = tile.square;
@@ -581,22 +657,35 @@ export const useChessStore = defineStore('chess', () => {
         makePlayerMove(tile.square);
     };
 
+    /** Drop the current selection without moving. */
+    const clearSelection = () => {
+        selectedSquare.value = null;
+        legalTargets.value = [];
+    };
+
     const makePlayerMove = (target) => {
+        // chess.js throws on an illegal move rather than returning null, so the
+        // destination has to be vetted first. Checked against the raw
+        // `legalTargets` list, never `legalTargetSet` — that one is empty when
+        // move hints are switched off, which would block every move.
+        if (!selectedSquare.value || !legalTargets.value.includes(target)) {
+            clearSelection();
+            return;
+        }
+
         const move = game.value.move({
             from: selectedSquare.value,
             to: target,
             promotion: 'q',
         });
-        if (!move) {
-            selectedSquare.value = null;
-            legalTargets.value = [];
-            return;
-        }
         registerMove(move, 'player');
-        selectedSquare.value = null;
-        legalTargets.value = [];
+        clearSelection();
         syncBoard();
+        _handOverToBot();
+    };
 
+    /** Shared tail for any committed player move: end the game, or let the engine reply. */
+    const _handOverToBot = () => {
         if (game.value.isGameOver()) {
             gamePhase.value = 'over';
             _stopClock();
@@ -604,6 +693,38 @@ export const useChessStore = defineStore('chess', () => {
         }
         botThinking.value = true;
         botTimer = window.setTimeout(makeBotMove, botDelay());
+    };
+
+    /**
+     * Fire the queued premove, if the engine's reply left it legal.
+     * Consumed either way — a premove never survives into a second turn.
+     */
+    const _tryPremove = () => {
+        const queued = premove.value;
+        premove.value = null;
+        if (
+            !queued ||
+            gamePhase.value !== 'playing' ||
+            game.value.turn() !== playerColor.value
+        )
+            return;
+
+        // Re-checked against the position the engine actually left behind,
+        // not the approximation the board offered when it was queued.
+        const legal = game.value
+            .moves({ square: queued.from, verbose: true })
+            .some((m) => m.to === queued.to);
+        if (!legal) return;
+
+        const move = game.value.move({
+            from: queued.from,
+            to: queued.to,
+            promotion: 'q',
+        });
+        registerMove(move, 'player');
+        clearSelection();
+        syncBoard();
+        _handOverToBot();
     };
 
     const makeBotMove = () => {
@@ -618,7 +739,9 @@ export const useChessStore = defineStore('chess', () => {
         if (game.value.isGameOver()) {
             gamePhase.value = 'over';
             _stopClock();
+            return;
         }
+        _tryPremove();
     };
 
     /* ================================================================== */
@@ -816,6 +939,7 @@ export const useChessStore = defineStore('chess', () => {
         resultReason.value = null;
         botThinking.value = false;
         lastPlayedMove.value = null;
+        premove.value = null;
         fullHistory.value = [];
         viewCursor.value = null;
         flipOverride.value = null;
@@ -883,8 +1007,8 @@ export const useChessStore = defineStore('chess', () => {
         const last = fullHistory.value[fullHistory.value.length - 1];
         lastMove.value = last ? { from: last.from, to: last.to } : null;
         lastPlayedMove.value = null;
-        selectedSquare.value = null;
-        legalTargets.value = [];
+        clearSelection();
+        clearPremove();
         viewCursor.value = null;
         moveFeedback.value = 'Move taken back';
         syncBoard();
@@ -957,6 +1081,7 @@ export const useChessStore = defineStore('chess', () => {
         isPlayerTurn,
         isCheckmate,
         canTakeback,
+        canStartByMoving,
         materialBalance,
         positionEval,
         evalPercent,
@@ -969,6 +1094,9 @@ export const useChessStore = defineStore('chess', () => {
         kingInCheckSquare,
         // Actions
         selectSquare,
+        clearSelection,
+        premove,
+        clearPremove,
         botDelay,
         newGame,
         startGame,

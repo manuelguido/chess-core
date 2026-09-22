@@ -82,7 +82,7 @@ const statusText = computed(() =>
             >
                 <!-- Eval bar: white's share of the static evaluation -->
                 <div
-                    class="relative w-[11px] shrink-0 overflow-hidden rounded-[3px] border border-[#1C232B] bg-bg-hover"
+                    class="relative w-[11px] shrink-0 overflow-hidden rounded-xs border border-[#1C232B] bg-bg-hover"
                     :title="`Evaluation ${chess.positionEval > 0 ? '+' : ''}${chess.positionEval}`"
                 >
                     <div

@@ -27,7 +27,7 @@ defineProps({
 <template>
     <div class="flex items-center gap-3 px-0.5">
         <div
-            class="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border transition-[border-color,box-shadow] duration-250"
+            class="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md border transition-[border-color,box-shadow] duration-250"
             :class="[
                 isEngine ? 'bg-bg-raised' : 'bg-bg-strong',
                 active

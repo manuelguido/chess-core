@@ -48,7 +48,7 @@ const barWidth = computed(
         :data-low="low"
     >
         <div
-            class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border transition-[border-color,box-shadow] duration-250"
+            class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border transition-[border-color,box-shadow] duration-250"
             :class="[
                 isEngine ? 'bg-bg-raised' : 'bg-bg-strong',
                 active
@@ -83,7 +83,7 @@ const barWidth = computed(
             </span>
             <span
                 v-else-if="prompt"
-                class="animate-rise mt-0.5 self-start rounded-md border border-accent-edge bg-accent-wash px-1.5 py-1 text-[10px] leading-none font-semibold tracking-[0.12em] text-accent"
+                class="animate-rise mt-0.5 self-start rounded-sm border border-accent-edge bg-accent-wash px-1.5 py-1 text-[10px] leading-none font-semibold tracking-[0.12em] text-accent"
             >
                 YOUR MOVE
             </span>

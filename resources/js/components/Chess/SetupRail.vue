@@ -9,16 +9,10 @@
 import { computed } from 'vue';
 import { FlipVertical2, Play, RefreshCw, RotateCcw } from 'lucide-vue-next';
 import ChessPiece from '../ChessPiece.vue';
+import TimeControlPicker from './TimeControlPicker.vue';
 import { useChessStore } from '../../stores/useChessStore.js';
 
 const chess = useChessStore();
-
-const TIME_PRESETS = [
-    { label: '1+0', base: 60, increment: 0 },
-    { label: '3+0', base: 180, increment: 0 },
-    { label: '5+3', base: 300, increment: 3 },
-    { label: '10+0', base: 600, increment: 0 },
-];
 
 const COLORS = [
     { label: 'White', value: 'w' },
@@ -30,11 +24,6 @@ const ASSISTANCE = [
     { key: 'showHints', label: 'Legal move hints' },
     { key: 'showCoords', label: 'Board coordinates' },
 ];
-
-const isTimeActive = (preset) =>
-    !!chess.timeControl &&
-    chess.timeControl.base === preset.base &&
-    chess.timeControl.increment === preset.increment;
 
 const phaseBadge = computed(() => {
     if (chess.gamePhase === 'playing') return 'LIVE';
@@ -50,148 +39,145 @@ const setElo = (event) => {
 
 <template>
     <aside class="rail">
-        <div
-            class="flex items-center justify-between border-b border-line-soft px-4 py-3.5"
-        >
-            <div class="flex flex-col gap-1">
-                <span class="eyebrow">Training mode</span>
-                <span class="text-[12.5px] font-semibold">
-                    Practice vs engine
-                </span>
-            </div>
-            <span class="badge badge--accent">{{ phaseBadge }}</span>
-        </div>
-
-        <!-- Opponent ------------------------------------------------- -->
-        <div class="rail-section">
-            <div class="eyebrow mb-3">Opponent</div>
-
-            <div class="flex items-center gap-3">
-                <div
-                    class="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md border border-line-strong bg-bg-raised"
-                >
-                    <ChessPiece class="h-6 w-6 opacity-70" color="b" type="n" />
-                </div>
-                <div class="min-w-0">
-                    <div class="truncate text-sm font-semibold">
-                        {{ chess.activeProfile?.name }}
-                    </div>
-                    <div class="mt-0.5 text-[11.5px] text-ink-soft">
-                        {{ chess.activeProfile?.style }}
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-4">
-                <div class="flex items-baseline justify-between gap-2">
-                    <label for="engine-elo" class="text-[11px] text-ink-soft">
-                        Engine strength
-                    </label>
-                    <output
-                        for="engine-elo"
-                        class="num text-[12px] font-semibold text-accent"
-                    >
-                        {{ chess.elo }} ELO
-                    </output>
-                </div>
-                <input
-                    id="engine-elo"
-                    class="elo-slider"
-                    type="range"
-                    min="800"
-                    max="3200"
-                    step="100"
-                    title="Estimated playing strength; 3200 uses maximum strength"
-                    :value="chess.elo"
-                    :aria-valuetext="`${chess.elo} ELO`"
-                    :disabled="chess.configLocked"
-                    :style="{
-                        '--elo-progress': `${((chess.elo - 800) / 2400) * 100}%`,
-                    }"
-                    @input="setElo"
-                />
-                <div
-                    class="num flex justify-between text-[10px] text-ink-fainter"
-                    aria-hidden="true"
-                >
-                    <span>800</span>
-                    <span>3200</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Session setup -------------------------------------------- -->
-        <div class="rail-section flex flex-col gap-4">
-            <div class="flex items-center justify-between">
-                <span class="eyebrow">Session setup</span>
-                <span
-                    v-if="chess.configLocked"
-                    class="micro text-ink-ghost"
-                    title="Setup is locked while a game is in progress"
-                >
-                    Locked
-                </span>
-            </div>
-
-            <div>
-                <div class="mb-2 text-[11px] text-ink-soft">Time control</div>
-                <div class="segmented grid-cols-4">
-                    <button
-                        v-for="preset in TIME_PRESETS"
-                        :key="preset.label"
-                        type="button"
-                        :data-active="isTimeActive(preset)"
-                        :disabled="chess.configLocked"
-                        @click="
-                            chess.setTimeControl({
-                                base: preset.base,
-                                increment: preset.increment,
-                            })
-                        "
-                    >
-                        {{ preset.label }}
-                    </button>
-                </div>
-            </div>
-
-            <div>
-                <div class="mb-2 text-[11px] text-ink-soft">Your colour</div>
-                <div class="segmented grid-cols-3">
-                    <button
-                        v-for="option in COLORS"
-                        :key="option.value"
-                        type="button"
-                        :data-active="chess.colorPreference === option.value"
-                        :disabled="chess.configLocked"
-                        @click="chess.setColorPreference(option.value)"
-                    >
-                        {{ option.label }}
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Assistance ----------------------------------------------- -->
-        <div class="rail-section flex flex-col gap-3">
-            <span class="eyebrow">Assistance</span>
-            <button
-                v-for="item in ASSISTANCE"
-                :key="item.key"
-                type="button"
-                class="flex items-center justify-between"
-                role="switch"
-                :aria-checked="chess[item.key]"
-                @click="chess[item.key] = !chess[item.key]"
+        <div class="min-h-0 flex-1 overflow-y-auto">
+            <div
+                class="flex items-center justify-between border-b border-line-soft px-4 py-3.5"
             >
-                <span class="text-[12.5px] text-ink-mild">
-                    {{ item.label }}
-                </span>
-                <span class="switch" :data-on="chess[item.key]" />
-            </button>
+                <div class="flex flex-col gap-1">
+                    <span class="eyebrow">Training mode</span>
+                    <span class="text-sm font-semibold">
+                        Practice vs engine
+                    </span>
+                </div>
+                <span class="badge badge--accent">{{ phaseBadge }}</span>
+            </div>
+
+            <!-- Opponent ------------------------------------------------- -->
+            <div class="rail-section">
+                <div class="eyebrow mb-3">Opponent</div>
+
+                <div class="flex items-center gap-3">
+                    <div
+                        class="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md border border-line-strong bg-bg-raised"
+                    >
+                        <ChessPiece
+                            class="h-6 w-6 opacity-70"
+                            color="b"
+                            type="n"
+                        />
+                    </div>
+                    <div class="min-w-0">
+                        <div class="truncate text-sm font-semibold">
+                            {{ chess.activeProfile?.name }}
+                        </div>
+                        <div class="mt-0.5 text-xs text-ink-soft">
+                            {{ chess.activeProfile?.style }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <div class="flex items-baseline justify-between gap-2">
+                        <label for="engine-elo" class="text-xs text-ink-muted">
+                            Engine strength
+                        </label>
+                        <output
+                            for="engine-elo"
+                            class="num text-[13px] font-semibold text-accent"
+                        >
+                            {{ chess.elo }} ELO
+                        </output>
+                    </div>
+                    <input
+                        id="engine-elo"
+                        class="elo-slider"
+                        type="range"
+                        min="800"
+                        max="3200"
+                        step="100"
+                        title="Estimated playing strength; 3200 uses maximum strength"
+                        :value="chess.elo"
+                        :aria-valuetext="`${chess.elo} ELO`"
+                        :disabled="chess.configLocked"
+                        :style="{
+                            '--elo-progress': `${((chess.elo - 800) / 2400) * 100}%`,
+                        }"
+                        @input="setElo"
+                    />
+                    <div
+                        class="num flex justify-between text-[11px] text-ink-soft"
+                        aria-hidden="true"
+                    >
+                        <span>800</span>
+                        <span>3200</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session setup -------------------------------------------- -->
+            <div class="rail-section flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                    <span class="eyebrow">Session setup</span>
+                    <span
+                        v-if="chess.configLocked"
+                        class="micro text-ink-ghost"
+                        title="Setup is locked while a game is in progress"
+                    >
+                        Locked
+                    </span>
+                </div>
+
+                <TimeControlPicker
+                    :control="chess.timeControl"
+                    :locked="chess.configLocked"
+                    @update:control="chess.setTimeControl"
+                />
+
+                <div>
+                    <div class="mb-2 text-[13px] text-ink-muted">
+                        Your colour
+                    </div>
+                    <div class="segmented grid-cols-3">
+                        <button
+                            v-for="option in COLORS"
+                            :key="option.value"
+                            type="button"
+                            :data-active="
+                                chess.colorPreference === option.value
+                            "
+                            :disabled="chess.configLocked"
+                            @click="chess.setColorPreference(option.value)"
+                        >
+                            {{ option.label }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assistance ----------------------------------------------- -->
+            <div class="rail-section flex flex-col gap-3">
+                <span class="eyebrow">Assistance</span>
+                <button
+                    v-for="item in ASSISTANCE"
+                    :key="item.key"
+                    type="button"
+                    class="flex items-center justify-between"
+                    role="switch"
+                    :aria-checked="chess[item.key]"
+                    @click="chess[item.key] = !chess[item.key]"
+                >
+                    <span class="text-[13px] text-ink-mild">
+                        {{ item.label }}
+                    </span>
+                    <span class="switch" :data-on="chess[item.key]" />
+                </button>
+            </div>
         </div>
 
-        <!-- Session actions ------------------------------------------ -->
-        <div class="mt-auto flex flex-col gap-2 px-4 pt-3.5 pb-4">
+        <!-- Session actions stay visible while the settings scroll. -->
+        <div
+            class="flex shrink-0 flex-col gap-2 border-t border-line px-4 pt-3.5 pb-4"
+        >
             <button
                 v-if="chess.gamePhase === 'lobby'"
                 type="button"
@@ -236,6 +222,15 @@ const setElo = (event) => {
 </template>
 
 <style scoped>
+.eyebrow {
+    font-size: 10.5px;
+    color: var(--color-ink-soft);
+}
+
+.segmented button {
+    font-size: 13px;
+}
+
 .elo-slider {
     display: block;
     width: 100%;

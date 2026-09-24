@@ -1,6 +1,6 @@
 <script setup>
 /**
- * PlayerClockCard — a compact clock placed beside its player at the board.
+ * PlayerClockCard — the clock in the shared match panel.
  */
 import { computed } from 'vue';
 
@@ -37,6 +37,7 @@ const barWidth = computed(
         :title="thinking ? 'Thinking' : prompt ? 'Your move' : undefined"
         :data-active="active"
         :data-low="low"
+        :data-long="clockText.length > 5"
     >
         <div class="player-card__clock">
             {{ clockText }}

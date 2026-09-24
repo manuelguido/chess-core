@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPinia, disposePinia } from 'pinia';
 import { nextTick } from 'vue';
+import { Chess, DEFAULT_POSITION } from 'chess.js';
 import { useChessStore } from '../../resources/js/stores/useChessStore.js';
+import { TIME_PRESETS } from '../../resources/js/config/timeControls.js';
 
 class SilentAudioContext {
     state = 'running';
@@ -146,6 +148,70 @@ function playLine(context, moves) {
         else workers[0].reply({ from, to });
     }
 }
+
+test('new sessions default to five minutes with no increment', (t) => {
+    const pinia = createPinia();
+    t.after(() => disposePinia(pinia));
+    const store = useChessStore(pinia);
+    assert.deepEqual(store.timeControl, { base: 300, increment: 0 });
+    assert.equal(store.playerClock.seconds, 300);
+    assert.equal(store.opponentClock.seconds, 300);
+});
+
+test('all time presets initialize both clocks and stay locked during play', (t) => {
+    const { store } = setup(t);
+    for (const preset of TIME_PRESETS) {
+        store.newGame();
+        store.setTimeControl({
+            base: preset.base,
+            increment: preset.increment,
+        });
+        store.startGame();
+        assert.deepEqual(store.clocks, { w: preset.base, b: preset.base });
+        store.setTimeControl({ base: 420, increment: 7 });
+        assert.deepEqual(store.timeControl, {
+            base: preset.base,
+            increment: preset.increment,
+        });
+    }
+});
+
+test('invalid clock settings leave the selected control unchanged', (t) => {
+    const { store } = setup(t);
+    const control = { base: 420, increment: 7 };
+    store.setTimeControl(control);
+    control.base = 0;
+    assert.deepEqual(store.timeControl, { base: 420, increment: 7 });
+    for (const invalid of [
+        undefined,
+        {},
+        { base: 0, increment: 0 },
+        { base: -60, increment: 0 },
+        { base: Infinity, increment: 0 },
+        { base: 60.5, increment: 0 },
+        { base: '300', increment: 0 },
+        { base: 10801, increment: 0 },
+        { base: 60, increment: -1 },
+        { base: 60, increment: NaN },
+        { base: 60, increment: 1.5 },
+        { base: 60, increment: 181 },
+    ]) {
+        store.setTimeControl(invalid);
+        assert.deepEqual(store.timeControl, { base: 420, increment: 7 });
+    }
+});
+
+test('custom time increments are added to the player and engine after each move', (t) => {
+    const { store, move, workers } = setup(t);
+    store.setTimeControl({ base: 420, increment: 7 });
+    store.startGame();
+    t.mock.timers.tick(1000);
+    move('e2', 'e4');
+    assert.deepEqual(store.clocks, { w: 426, b: 420 });
+    t.mock.timers.tick(1000);
+    workers[0].reply();
+    assert.deepEqual(store.clocks, { w: 426, b: 426 });
+});
 
 function prepareCastling(t, playerColor = 'w') {
     const context = setup(t, { playerColor });
@@ -331,6 +397,35 @@ test('board controls and clocks keep working while the worker searches', (t) => 
     assert.equal(store.clocks.b, remaining - 1);
     assert.equal(store.clocks.w, 60);
     assert.deepEqual(store.moveHistory, ['e4']);
+});
+
+test('the position FEN follows the board through start, history, and live views', (t) => {
+    const { store, beginSearch } = setup(t);
+    const worker = beginSearch();
+    const firstMoveFen = store.viewFen;
+    worker.reply();
+    const liveFen = store.viewFen;
+
+    store.goToStart();
+    assert.equal(store.viewFen, DEFAULT_POSITION);
+    assert.deepEqual(
+        store.flattenedBoard.map((tile) => tile.piece),
+        new Chess(store.viewFen).board().flat(),
+    );
+
+    store.goForward();
+    assert.equal(store.viewFen, firstMoveFen);
+    assert.deepEqual(
+        store.flattenedBoard.map((tile) => tile.piece),
+        new Chess(store.viewFen).board().flat(),
+    );
+
+    store.returnToLive();
+    assert.equal(store.viewFen, liveFen);
+    assert.deepEqual(
+        store.flattenedBoard.map((tile) => tile.piece),
+        new Chess(store.viewFen).board().flat(),
+    );
 });
 
 test('a valid reply commits exactly one move and returns control to the player', (t) => {

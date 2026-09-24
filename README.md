@@ -8,12 +8,11 @@ The project is intentionally scoped to local play against a bot. It is not a mul
 
 - Play a legal chess game against a configurable bot.
 - Choose player color before the game starts.
-- Pick from preset time controls or define a custom base time and increment.
-- Play untimed games.
+- Start with 5+0 Blitz, choose from 11 Bullet/Blitz/Rapid/Classical presets, or set a custom time (1–180 minutes and 0–180 seconds of increment).
 - See legal target squares, the last move, check state, captured material, material balance, and status text.
 - Review previous positions through the move history without disturbing the live game.
 - Start a new game or resign the current game.
-- Use a responsive board layout with a side panel on desktop and a settings drawer on smaller screens.
+- See both clocks together beside the board, with Moves, Captured, and Position panels. On smaller screens, the match panel and settings stack below the board.
 - Hear synthesized move, capture, check, and game-end sounds generated through the Web Audio API.
 
 ## Game Model And Opponent
@@ -156,6 +155,8 @@ Move review is separate from the live board. The store replays SAN history into 
 The board component owns pixel-level move animation because animation depends on measured square size. The store only emits the last played move.
 
 Clock state is handled in the store with one interval. In timed games, the side to move loses when their clock reaches zero. Increment is applied after each committed move.
+
+The game screen groups the board and match sidebar within one bounded workspace. `MatchClocks` resolves player identity and clock order from the board orientation; `AnalysisRail` owns move review, captures and FEN display; `GameActions` owns status and in-game controls. `TimeControlPicker` uses the shared presets and validation in `config/timeControls.js`.
 
 ## Known Boundaries
 

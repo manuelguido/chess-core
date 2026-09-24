@@ -1,7 +1,11 @@
 import { defineStore } from 'pinia';
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue';
-import { Chess } from 'chess.js';
+import { Chess, DEFAULT_POSITION } from 'chess.js';
 import { useChessSound } from '../composables/useChessSound.js';
+import {
+    DEFAULT_TIME_CONTROL,
+    isValidTimeControl,
+} from '../config/timeControls.js';
 
 const pieceValues = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
 const centerSquares = new Set(['d4', 'e4', 'd5', 'e5']);
@@ -74,7 +78,7 @@ export const useChessStore = defineStore('chess', () => {
      * Time control: base in seconds, increment in seconds.
      * null = untimed.
      */
-    const timeControl = ref({ base: 180, increment: 0 }); // 3+0
+    const timeControl = ref({ ...DEFAULT_TIME_CONTROL }); // 5+0 Blitz
 
     const configLocked = computed(() => gamePhase.value !== 'lobby');
 
@@ -230,6 +234,7 @@ export const useChessStore = defineStore('chess', () => {
     });
 
     const viewFen = computed(() => {
+        if (viewCursor.value === -1) return DEFAULT_POSITION;
         if (viewCursor.value === null || fullHistory.value.length === 0) {
             return positionFen.value;
         }
@@ -1092,7 +1097,8 @@ export const useChessStore = defineStore('chess', () => {
     /** Set the time control — only in lobby. `null` = untimed. */
     const setTimeControl = (control) => {
         if (gamePhase.value !== 'lobby') return;
-        timeControl.value = control;
+        if (control !== null && !isValidTimeControl(control)) return;
+        timeControl.value = control === null ? null : { ...control };
     };
 
     /* ================================================================== */

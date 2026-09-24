@@ -117,6 +117,13 @@ npm run dev
 npm run build
 ```
 
+Deploy the complete `public/build` directory, including Stockfish's JavaScript
+and `.wasm` assets. Ideally serve `.wasm` with `Content-Type: application/wasm` so
+the browser can compile it while downloading. The engine also supports hosts
+that return a generic MIME type (such as `text/plain`) by compiling the downloaded
+bytes inside its worker. Initialization failures are reported immediately with
+the existing retry action.
+
 ## Tests And Checks
 
 Run the Laravel test suite:

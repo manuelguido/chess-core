@@ -1,6 +1,7 @@
 import engineScriptAsset from 'stockfish/bin/stockfish-18-lite-single.js?url';
 import engineWasmAsset from 'stockfish/bin/stockfish-18-lite-single.wasm?url';
 import { StockfishController } from '../engine/stockfishController.js';
+import { createStockfishBootstrap } from '../engine/stockfishBootstrap.js';
 
 let runtime = null;
 let runtimeUrl = null;
@@ -33,12 +34,18 @@ function loadRuntime() {
     // Stockfish's Emscripten runtime needs a classic worker. The tiny same-origin
     // bootstrap also permits Vite's development assets to live on another port.
     runtimeUrl = URL.createObjectURL(
-        new Blob([`importScripts(${JSON.stringify(script)});`], {
+        new Blob([createStockfishBootstrap(script)], {
             type: 'application/javascript',
         }),
     );
     runtime = new Worker(`${runtimeUrl}#${encodeURIComponent(wasm)}`);
-    runtime.onmessage = ({ data }) => controller.handleLine(data);
+    runtime.onmessage = ({ data }) => {
+        if (data?.type === 'runtime-error') {
+            controller.fail(new Error(data.error));
+            return;
+        }
+        controller.handleLine(data);
+    };
     runtime.onerror = (event) => {
         event.preventDefault();
         controller.fail(new Error(event.message || 'Stockfish could not load'));
